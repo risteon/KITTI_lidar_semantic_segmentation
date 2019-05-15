@@ -1,0 +1,3 @@
+[submodule "catkin_ws/src/cartographer"]
+	path = catkin_ws/src/cartographer
+	url = https://github.com/googlecartographer/cartographer.git
