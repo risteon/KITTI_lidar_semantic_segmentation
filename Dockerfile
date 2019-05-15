@@ -47,10 +47,9 @@ ENV TZ=Europe/Minsk
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt-get update
+# install prerequisities
 RUN set -ex && \
     apt-get install -y --no-install-recommends \
-    ros-melodic-ros-base \
-    ros-melodic-pcl-conversions \
     libtinyxml-dev \
     liburdfdom-dev \
     liburdfdom-headers-dev \
@@ -58,10 +57,17 @@ RUN set -ex && \
     liburdfdom-model-state \
     liburdfdom-sensor \
     liburdfdom-world \
-    ros-melodic-urdf \
+    libgflags-dev \
+    libgflags2.2 \
     python-wstool \
     python-rosdep \
     ninja-build
+# install ROS
+RUN set -ex && \
+    apt-get install -y --no-install-recommends \
+    ros-melodic-ros-base \
+    ros-melodic-pcl-conversions \
+    ros-melodic-urdf
 
 # install python3 and virtualenv
 RUN set -ex && \
@@ -98,9 +104,27 @@ COPY --chown=default script script
 COPY --chown=default deeplab_v3_checkpoint deeplab_v3_checkpoint
 COPY --chown=default kitti_lidar_semantics kitti_lidar_semantics
 COPY --chown=default catkin_ws catkin_ws
+COPY --chown=default models models
+
+# install models
+RUN \
+    set -ex; \
+    . p3env/bin/activate && \
+    pip install ~/models/research && \
+    pip install ~/models/research/slim
+
+RUN rm -rf ~/models
 
 # build google cartographer
 WORKDIR /home/default
-# RUN ["/bin/bash", "script/build_kitti_cartographer.sh"]
+# create virtualenv with python2 for cartographer
+RUN virtualenv p2env
+RUN /bin/bash -c \
+    ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
+    cd ~/catkin_ws/src && catkin_init_workspace && \
+    cd ~/catkin_ws && src/cartographer/scripts/install_proto3.sh"
 
+RUN /bin/bash -c \
+    ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
+    catkin_make_isolated --install --use-ninja"
 
