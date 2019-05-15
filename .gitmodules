@@ -4,3 +4,6 @@
 [submodule "catkin_ws/src/cartographer_ros"]
 	path = catkin_ws/src/cartographer_ros
 	url = https://github.com/googlecartographer/cartographer_ros.git
+[submodule "catkin_ws/src/ceres-solver"]
+	path = catkin_ws/src/ceres-solver
+	url = https://ceres-solver.googlesource.com/ceres-solver.git
