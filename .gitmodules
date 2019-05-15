@@ -7,3 +7,6 @@
 [submodule "catkin_ws/src/ceres-solver"]
 	path = catkin_ws/src/ceres-solver
 	url = https://ceres-solver.googlesource.com/ceres-solver.git
+[submodule "models"]
+	path = models
+	url = https://github.com/risteon/models.git
