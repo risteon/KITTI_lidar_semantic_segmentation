@@ -1,0 +1,14 @@
+Metadata-Version: 1.1
+Name: kitti-lidar-semantics
+Version: 0.1.0
+Summary: Annotated LiDAR measurements with semantic classes from RGB images.
+Home-page: UNKNOWN
+Author: Christoph Rist
+Author-email: c.rist@posteo.de
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 3.6

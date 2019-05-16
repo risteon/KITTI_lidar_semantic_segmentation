@@ -14,16 +14,15 @@ import itertools
 import tempfile
 import subprocess
 import datetime
-import threading
+import time
 
 import deeplab
 from deeplab.vis import FLAGS as dl_flags
 from deeplab.vis import main as dl_main
 
-from .autolabeling_on_cartographer import do_work, Data
-from .split_kitti_point_clouds import save_velo_data_stream
-from .shared_snippets import read_xml_config
-from .post_to_mattermost import send_mattermost_msg
+from .ego_motion_correction_and_interpolation import do_work, Data
+from .utils import save_velo_data_stream
+from .utils import read_xml_config
 
 
 logger = logging.getLogger(__name__)
@@ -143,14 +142,14 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
     count = get_raw_sequence_sample_count(sequence)
     if not count:
         err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
-        return False, err, None
+        return False, err
 
     # tmp_dir = tempfile.mkdtemp(prefix='kitti_semantics_{}_{}'.format(sequence[0], sequence[1]))
     # Todo DEBUG
     assert DEBUG
     tmp_dir = "/tmp/kitti_semantics_TMP"
     # shutil.rmtree(tmp_dir)
-    # pathlib.Path(tmp_dir).mkdir(exist_ok=True)
+    pathlib.Path(tmp_dir).mkdir(exist_ok=True)
 
     logger.info("Writing to tmp directory {}".format(tmp_dir))
     tmp_dir = pathlib.Path(tmp_dir)
@@ -163,38 +162,38 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
     log_data = {}
 
     try:
-        # # RGB SEMANTICS
-        # path_sem_02, sem_folder_02 = generate_stereo_semantics(
-        #     tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='02')
-        # path_sem_03, sem_folder_03 = generate_stereo_semantics(
-        #     tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='03')
-        #
-        # # PARTITION POINT CLOUDS
-        # # complete point cloud
-        # path_partitioned = processed_output / 'velodyne_points_partitioned'
-        # path_partitioned.mkdir(parents=True, exist_ok=True)
-        # # point cloud without points z < -1.4m
-        # path_partitioned2 = tmp_dir / 'velodyne_points_partitioned_truncated'
-        # path_partitioned2.mkdir(parents=True, exist_ok=True)
-        # save_velo_data_stream(velodyne_data_folder=pathlib.Path(sequence[2]) / 'velodyne_points',
-        #                       velodyne_target_folder=str(path_partitioned),
-        #                       velodyne_target_folder2=str(path_partitioned2),
-        #                       velo_calib=velo_calib)
-        #
-        # # CARTOGRAPHER
-        # print("Running cartographer")
-        # if subprocess.call([str(cartographer_script), str(kitti_root), str(tmp_dir), sequence[0],
-        #                     sequence[1], str(processed_output)]):
-        #     raise RuntimeError("Error when calling cartographer.")
+        # RGB SEMANTICS
+        path_sem_02, sem_folder_02 = generate_stereo_semantics(
+            tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='02')
+        path_sem_03, sem_folder_03 = generate_stereo_semantics(
+            tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='03')
+
+        # PARTITION POINT CLOUDS
+        # complete point cloud
+        path_partitioned = processed_output / 'velodyne_points_partitioned'
+        path_partitioned.mkdir(parents=True, exist_ok=True)
+        # point cloud without points z < -1.4m
+        path_partitioned2 = tmp_dir / 'velodyne_points_partitioned_truncated'
+        path_partitioned2.mkdir(parents=True, exist_ok=True)
+        save_velo_data_stream(velodyne_data_folder=pathlib.Path(sequence[2]) / 'velodyne_points',
+                              velodyne_target_folder=str(path_partitioned),
+                              velodyne_target_folder2=str(path_partitioned2),
+                              velo_calib=velo_calib)
+
+        # CARTOGRAPHER
+        print("Running cartographer")
+        if subprocess.call([str(cartographer_script), str(kitti_root), str(tmp_dir), sequence[0],
+                            sequence[1], str(processed_output)]):
+            raise RuntimeError("Error when calling cartographer.")
 
         # # Todo
         # assert DEBUG
-        path_sem_02 = pathlib.Path('/tmp/kitti_semantics_TMP/sem_deeplab71_90000_02')
-        path_sem_03 = pathlib.Path('/tmp/kitti_semantics_TMP/sem_deeplab71_90000_03')
-        sem_folder_02 = 'sem_deeplab71_90000_02'
-        sem_folder_03 = 'sem_deeplab71_90000_03'
+        # path_sem_02 = pathlib.Path('/tmp/kitti_semantics_TMP/sem_deeplab71_90000_02')
+        # path_sem_03 = pathlib.Path('/tmp/kitti_semantics_TMP/sem_deeplab71_90000_03')
+        # sem_folder_02 = 'sem_deeplab71_90000_02'
+        # sem_folder_03 = 'sem_deeplab71_90000_03'
 
-        # EGO MOTION CORRECTION + AUTOLABELING
+        # EGO MOTION CORRECTION + INTERPOLATION OF PROBS
         pykitti_obj = pykitti.raw(kitti_root, sequence[0], sequence[1])
         s_root = pathlib.Path(sequence[2])
 
@@ -239,14 +238,6 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
                 scales=['0.25_a', '0.25_b', '0.75_a', '0.75_b', '2.0_a', '2.0_b'],
                 channels_last=True)
 
-        bkp = pathlib.Path('/mapr/738.mbc.de/data/transform/rd/athena/atplid/'
-                           'processed_raw_sequences') / day_folder
-        x = threading.Thread(target=copy_to_mapr, args=(processed_output, bkp, bkp / seq_folder))
-        # # Todo Debug
-        # assert DEBUG
-        # x.start()
-        x = None
-
         # create a success marker
         with open(str(processed_output / 'log'), 'w') as f:
             f.write('complete ' + str(datetime.datetime.now()))
@@ -256,17 +247,12 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
         # create a fail marker
         with open(str(processed_output / 'log'), 'w') as f:
             f.write('failed ' + str(datetime.datetime.now()) + str(e))
-        return False, str(e), None
+        return False, str(e)
     finally:
         # Todo DEBUG
         assert DEBUG
         # shutil.rmtree(tmp_dir)
-    return True, 'ok', x
-
-
-def copy_to_mapr(src, dst_day: pathlib.PosixPath, dst_seq: pathlib.PosixPath):
-    dst_day.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(str(src), str(dst_seq))
+    return True, 'ok'
 
 
 @click.command()
@@ -281,7 +267,7 @@ def main(kitti_root, output, checkpoint):
     if not cartographer_script.exists():
         raise RuntimeError("Cartographer script not found {}".format(cartographer_script))
 
-    calib_file = pathlib.Path(__file__).resolve().parent / pathlib.Path('data') / \
+    calib_file = pathlib.Path(__file__).resolve().parent.parent / pathlib.Path('data') / \
                  pathlib.Path('hdl64_calib_corrections.xml')
     velo_calib = read_xml_config(calib_file)
 
@@ -289,43 +275,33 @@ def main(kitti_root, output, checkpoint):
     output = pathlib.Path(output)
     sequences = find_kitti_raw_sequences(kitti_root, KITTI_DAYS)
 
-    threads = []
+    with open(str(output / 'log_{}'.format(time.strftime("%Y%m%d-%H%M%S"))), 'w') as log_file:
+        for s in sequences:
+            # Todo DEBUG
+            assert DEBUG
+            # s = sequences[22]
+            # s = sequences[65]
+            # s = sequences[141]
+            s = sequences[24]
 
-    for s in sequences:
-        # Todo DEBUG
-        assert DEBUG
-        # s = sequences[22]
-        # s = sequences[65]
-        # s = sequences[141]
-        s = sequences[24]
+            logger.info("Processing Sequence {}/{}".format(s[0], s[1]))
+            succ, msg = process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib,
+                                         output, s)
 
-        logger.info("Processing Sequence {}/{}".format(s[0], s[1]))
-        succ, msg, thread = process_sequence(checkpoint, kitti_root, cartographer_script,
-                                             velo_calib, output, s)
-        if thread:
-            threads.append(thread)
-        if succ:
-            msg = '{} [AUTOLABELING] Processed KITTI sequence {}/{} successfully.'\
-                .format(str(datetime.datetime.now()), s[0], s[1])
-        else:
-            msg = '{} [AUTOLABELING] Failed on KITTI sequence {}/{}: {}.'\
-                .format(str(datetime.datetime.now()), s[0], s[1], msg)
-        try:
-            if not send_mattermost_msg(msg):
-                print("Could not post to mattermost. Msg: {}".format(msg))
-        except Exception as e:
-            print("Could not send to mattermost {}".format(str(e)))
+            if succ:
+                msg = '{} Processed KITTI sequence {}/{} successfully.'\
+                    .format(str(datetime.datetime.now()), s[0], s[1])
+            else:
+                msg = '{} Failed on KITTI sequence {}/{}: {}.'\
+                    .format(str(datetime.datetime.now()), s[0], s[1], msg)
+            try:
+                log_file.write('{}\n'.format(msg))
+            except Exception as e:
+                print("Could not write log: {}".format(str(e)))
 
-        # # Todo DEBUG
-        assert DEBUG
-        break
-
-    print("Waiting for copy threads")
-    for t in threads:
-        try:
-            t.join()
-        except RuntimeError():
-            pass
+            # # Todo DEBUG
+            assert DEBUG
+            break
 
 
 if __name__ == '__main__':

@@ -7,13 +7,11 @@ import pathlib
 import collections
 import os
 import datetime
-import click
 import pykitti
 import numpy as np
 import typing
 import progressbar
 import math
-import numba
 import tensorflow as tf
 import logging
 # SciPy
@@ -21,10 +19,13 @@ import scipy.interpolate
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 
-from .shared_snippets import read_xml_config, read_binary_point_cloud_with_intensity, \
-    read_timestamps_from_file, read_png_image, get_image_size, \
+from .utils import \
+    read_binary_point_cloud_with_intensity, \
+    read_timestamps_from_file, \
+    read_png_image, \
+    get_image_size, \
     write_binary_point_cloud_with_intensity
-from .split_kitti_point_clouds import find_jumps2
+from .utils import find_jumps
 
 
 logger = logging.getLogger(__name__)
@@ -239,7 +240,7 @@ def calc_sensor_head_azimuth(point_cloud: np.ndarray,
     azimuth = np.arctan2(point_cloud[:, 1], point_cloud[:, 0])
     # try to figure out row changes by change of y-coordinate sign
     # 'rows' is the sensor row of every point
-    rows = find_jumps2(point_cloud, auto_correct=auto_correct)
+    rows = find_jumps(point_cloud, auto_correct=auto_correct)
 
     delta_angles = np.asarray([x['rotCorrection'] * math.pi / 180.0 for x in calib])
     corrected_azimuth = azimuth - delta_angles[rows]
@@ -404,8 +405,6 @@ def process_single_example(i, path_pointcloud, path_img_02, path_img_03, path_se
             [img_coords_02, img_coords_03], valid_mask, sem_probs, scales, channels_last)
         # RESULTS: [images x points x channels]
         per_image_probs = np.mean(interpolated_probs, axis=(1, )).transpose((0, 2, 1))
-        # fused_probs = np.mean(interpolated_probs, axis=(0, 1)).transpose()
-        # assert np.allclose(np.sum(fused_probs, axis=-1), np.ones_like(fused_probs[:, 0]))
 
         stats = single_frame_stats(interpolated_probs, scales)
 
@@ -564,81 +563,3 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
     np.savez(str(output_path_probs / 'concensus_stats'), **statistics)
     logger.info("Sequence consensus [mean/vote]: {} / {}"
                 .format(statistics['concensus_mean'].mean(), statistics['concensus_vote'].mean()))
-
-
-def make_paths(sequence_folder, data):
-    p = pathlib.Path(sequence_folder)
-    if not p.exists():
-        raise NotADirectoryError("Kitti root {} does not exist.".format(sequence_folder))
-
-    def convert(d: Data):
-        if isinstance(d.timestamps, tuple):
-            t = tuple(p / pathlib.Path(x) for x in d.timestamps)
-        else:
-            t = p / pathlib.Path(d.timestamps)
-
-        return Data(timestamps=t, data=p / pathlib.Path(d.data),
-                    file_extension=d.file_extension)
-
-    data = {k: convert(v) for k, v in data.items()}
-
-    for v in data.values():
-        if not v.data.exists():
-            raise FileNotFoundError("Does not exist {}.".format(v.data))
-        x = v.timestamps if isinstance(v.timestamps, tuple) else (v.timestamps, )
-        for t in x:
-            if not t.is_file():
-                raise FileNotFoundError("Not a file {}.".format(t))
-    return data
-
-
-@click.command()
-@click.argument('kitti_root')
-@click.argument('output')
-@click.option('--date', '-d', default=None)
-@click.option('--run', '-r', default=None)
-@click.option('--calib_file', default=None)
-@click.option('--ego-motion_correction/--no-ego-motion-correction', default=True)
-@click.option('--progress-bar/--no-progress-bar', default=True)
-def main(kitti_root, output, date, run, calib_file, ego_motion_correction, progress_bar):
-    if calib_file is None:
-        calib_file = pathlib.Path(__file__).resolve().parent / pathlib.Path('data') / \
-                     pathlib.Path('hdl64_calib_corrections.xml')
-
-    velo_calib = read_xml_config(calib_file)
-
-    output = pathlib.Path(output)
-    output.mkdir(exist_ok=True, parents=False)
-
-    sequence_folder = pathlib.Path(kitti_root) / date / pathlib.Path(
-        '{}_drive_{}_sync'.format(date, run))
-
-    # check for necessary folders
-    data = {
-        'velodyne': Data(timestamps=('velodyne_points/timestamps.txt',
-                                     'velodyne_points/timestamps_start.txt',
-                                     'velodyne_points/timestamps_end.txt',),
-                         data='velodyne_points/data',
-                         file_extension='bin'),
-        'map_cartographer': Data(timestamps='map_cartographer/timestamps.txt',
-                                 data='map_cartographer/poses.txt',
-                                 file_extension=None),
-        'image_02': Data(timestamps='image_02/timestamps.txt',
-                         data='image_02/data',
-                         file_extension='png'),
-        'image_03': Data(timestamps='image_03/timestamps.txt',
-                         data='image_03/data',
-                         file_extension='png'),
-        'semantics_02': Data(timestamps='semantics_02/timestamps.txt',
-                             data='semantics_02/data',
-                             file_extension='npz'),
-        'semantics_03': Data(timestamps='semantics_03/timestamps.txt',
-                             data='semantics_03/data',
-                             file_extension='npz'),
-    }
-
-    data = make_paths(sequence_folder, data)
-    kitti = pykitti.raw(kitti_root, date, run)
-
-    do_work(kitti, data, output, velo_calib, [0.7, 1.0, 1.2], ego_motion_correction, progress_bar,
-            channels_last=False)

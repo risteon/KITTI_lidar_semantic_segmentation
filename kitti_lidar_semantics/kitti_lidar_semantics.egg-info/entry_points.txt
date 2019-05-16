@@ -1,0 +1,3 @@
+[console_scripts]
+run_on_kitti = kitti_lidar_semantics.run_on_kitti:main
+

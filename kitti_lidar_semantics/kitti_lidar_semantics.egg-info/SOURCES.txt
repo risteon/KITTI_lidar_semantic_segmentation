@@ -1,0 +1,12 @@
+setup.py
+kitti_lidar_semantics/__init__.py
+kitti_lidar_semantics/ego_motion_correction_and_interpolation.py
+kitti_lidar_semantics/run_on_cartographer.py
+kitti_lidar_semantics/utils.py
+kitti_lidar_semantics.egg-info/PKG-INFO
+kitti_lidar_semantics.egg-info/SOURCES.txt
+kitti_lidar_semantics.egg-info/dependency_links.txt
+kitti_lidar_semantics.egg-info/entry_points.txt
+kitti_lidar_semantics.egg-info/not-zip-safe
+kitti_lidar_semantics.egg-info/requires.txt
+kitti_lidar_semantics.egg-info/top_level.txt
