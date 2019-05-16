@@ -15,6 +15,7 @@ import tempfile
 import subprocess
 import datetime
 import time
+import sys
 
 import deeplab
 from deeplab.vis import FLAGS as dl_flags
@@ -152,8 +153,6 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
     processed_output.mkdir(parents=True, exist_ok=True)
     logger.info("Writing to output directory {}".format(str(processed_output)))
 
-    log_data = {}
-
     try:
         # RGB SEMANTICS
         path_sem_02, sem_folder_02 = generate_stereo_semantics(
@@ -259,6 +258,7 @@ def main(kitti_root, output, checkpoint, day):
         kitti_days = KITTI_DAYS
     else:
         kitti_days = [day]
+        del sys.argv[1:]
 
     kitti_root = pathlib.Path(kitti_root)
     output = pathlib.Path(output)
