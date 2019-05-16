@@ -59,15 +59,76 @@ RUN set -ex && \
     liburdfdom-world \
     libgflags-dev \
     libgflags2.2 \
+    libgoogle-glog-dev \
+    libamd2 \
+    libbtf1 \
+    libcamd2 \
+    libccolamd2 \
+    libcholmod3 \
+    libcolamd2 \
+    libcxsparse3 \
+    libgraphblas1 \
+    libklu1 \
+    libldl2 \
+    libmetis5 \
+    librbio2 \
+    libspqr2 \
+    libsuitesparse-dev \
+    libsuitesparseconfig5 \
+    libumfpack5 \
+    libprotobuf-dev \
+    libprotobuf-lite10 \
+    libprotobuf10 \
+    libprotoc10 \
+    protobuf-compiler \
+    libprotoc-dev \
+    python-alabaster \
+    python-babel \
+    python-babel-localedata \
+    python-certifi \
+    python-chardet \
+    python-imagesize \
+    python-jinja2 \
+    python-markupsafe \
+    python-pygments \
+    python-requests \
+    python-sphinx \
+    python-typing \
+    python-tz \
+    python-urllib3 \
     python-wstool \
     python-rosdep \
+    sphinx-common \
+    sip-dev \
     ninja-build
+
 # install ROS
 RUN set -ex && \
     apt-get install -y --no-install-recommends \
     ros-melodic-ros-base \
+    ros-melodic-angles \
+    ros-melodic-eigen-conversions \
+    ros-melodic-image-transport \
+    ros-melodic-interactive-markers \
+    ros-melodic-laser-geometry \
+    ros-melodic-map-msgs \
+    ros-melodic-media-export \
     ros-melodic-pcl-conversions \
+    ros-melodic-python-qt-binding \
+    ros-melodic-resource-retriever \
+    ros-melodic-tf \
+    ros-melodic-tf2 \
+    ros-melodic-tf2-eigen \
+    ros-melodic-tf2-geometry-msgs \
+    ros-melodic-tf2-py \
+    ros-melodic-tf2-sensor-msgs \
     ros-melodic-urdf
+
+# install prerequisites for cartographer
+RUN set -ex && \
+    apt-get install -y --no-install-recommends \
+    liblua5.3-dev \
+    libcairo2-dev
 
 # install python3 and virtualenv
 RUN set -ex && \
@@ -91,6 +152,15 @@ RUN useradd -ms /bin/bash default
 RUN adduser default sudo
 USER default
 WORKDIR /home/default
+
+# copy data and repositories
+COPY --chown=default script script
+COPY --chown=default deeplab_v3_checkpoint deeplab_v3_checkpoint
+COPY --chown=default kitti_lidar_semantics kitti_lidar_semantics
+COPY --chown=default kitti2bag kitti2bag
+COPY --chown=default catkin_ws catkin_ws
+COPY --chown=default models models
+
 # create virtual env for python3 with tensorflow
 RUN python3 -m venv p3env
 RUN \
@@ -98,13 +168,6 @@ RUN \
     . p3env/bin/activate && \
     pip install wheel && \
     pip install tensorflow-gpu==1.13.1
-
-# copy data and repositories
-COPY --chown=default script script
-COPY --chown=default deeplab_v3_checkpoint deeplab_v3_checkpoint
-COPY --chown=default kitti_lidar_semantics kitti_lidar_semantics
-COPY --chown=default catkin_ws catkin_ws
-COPY --chown=default models models
 
 # install models
 RUN \
@@ -119,12 +182,19 @@ RUN rm -rf ~/models
 WORKDIR /home/default
 # create virtualenv with python2 for cartographer
 RUN virtualenv p2env
+RUN \
+    set -ex; \
+    . p2env/bin/activate && \
+    pip install catkin_pkg pyyaml empy && \
+    pip install ~/kitti2bag
+
 RUN /bin/bash -c \
     ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
     cd ~/catkin_ws/src && catkin_init_workspace && \
     cd ~/catkin_ws && src/cartographer/scripts/install_proto3.sh"
 
-RUN /bin/bash -c \
-    ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
-    catkin_make_isolated --install --use-ninja"
+#RUN /bin/bash -c \
+#    ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
+#    cd ~/catkin_ws && \
+#    catkin_make_isolated --install --use-ninja"
 
