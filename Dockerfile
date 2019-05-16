@@ -147,9 +147,11 @@ RUN set -ex && \
     sed -i -e '/Defaults\s\+env_reset/a Defaults\texempt_group=sudo' /etc/sudoers && \
     sed -i -e 's/%sudo\s*ALL=(ALL:ALL) ALL/%sudo\tALL=(ALL) NOPASSWD:ALL/g' /etc/sudoers
 
-# switch to non-root installation
+# switch to non-root installation. Use group with specific ID to manage permissions on host filesystem.
 RUN useradd -ms /bin/bash default
+RUN addgroup --gid 85200 wgroup
 RUN adduser default sudo
+RUN adduser default wgroup
 USER default
 WORKDIR /home/default
 
@@ -160,6 +162,9 @@ COPY --chown=default kitti_lidar_semantics kitti_lidar_semantics
 COPY --chown=default kitti2bag kitti2bag
 COPY --chown=default catkin_ws catkin_ws
 COPY --chown=default models models
+# remove cartographer rviz (not necessary)
+RUN \
+    rm -rf ~/catkin_ws/src/cartographer_ros/cartographer_rviz
 
 # create virtual env for python3 with tensorflow
 RUN python3 -m venv p3env
@@ -193,8 +198,8 @@ RUN /bin/bash -c \
     cd ~/catkin_ws/src && catkin_init_workspace && \
     cd ~/catkin_ws && src/cartographer/scripts/install_proto3.sh"
 
-#RUN /bin/bash -c \
-#    ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
-#    cd ~/catkin_ws && \
-#    catkin_make_isolated --install --use-ninja"
+RUN /bin/bash -c \
+    ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
+    cd ~/catkin_ws && \
+    catkin_make_isolated --install --use-ninja"
 
