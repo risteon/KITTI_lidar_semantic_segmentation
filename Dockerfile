@@ -155,17 +155,6 @@ RUN adduser default wgroup
 USER default
 WORKDIR /home/default
 
-# copy data and repositories
-COPY --chown=default script script
-COPY --chown=default deeplab_v3_checkpoint deeplab_v3_checkpoint
-COPY --chown=default kitti_lidar_semantics kitti_lidar_semantics
-COPY --chown=default kitti2bag kitti2bag
-COPY --chown=default catkin_ws catkin_ws
-COPY --chown=default models models
-# remove cartographer rviz (not necessary)
-RUN \
-    rm -rf ~/catkin_ws/src/cartographer_ros/cartographer_rviz
-
 # create virtual env for python3 with tensorflow
 RUN python3 -m venv p3env
 RUN \
@@ -174,16 +163,24 @@ RUN \
     pip install wheel && \
     pip install tensorflow-gpu==1.13.1
 
+# copy tensorflow models
+COPY --chown=default models models
 # install models
 RUN \
     set -ex; \
     . p3env/bin/activate && \
-    pip install ~/models/research && \
-    pip install ~/models/research/slim
+    pip install -e ~/models/research && \
+    pip install -e ~/models/research/slim
 
 RUN rm -rf ~/models
 
 # build google cartographer
+COPY --chown=default kitti2bag kitti2bag
+COPY --chown=default catkin_ws catkin_ws
+# remove cartographer rviz (not necessary)
+RUN \
+    rm -rf ~/catkin_ws/src/cartographer_ros/cartographer_rviz
+
 WORKDIR /home/default
 # create virtualenv with python2 for cartographer
 RUN virtualenv p2env
@@ -202,4 +199,16 @@ RUN /bin/bash -c \
     ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
     cd ~/catkin_ws && \
     catkin_make_isolated --install --use-ninja"
+
+# copy and install python code for semantics generation and deeplab checkpoint
+COPY --chown=default deeplab_v3_checkpoint deeplab_v3_checkpoint
+COPY --chown=default kitti_lidar_semantics kitti_lidar_semantics
+RUN \
+    set -ex; \
+    . p3env/bin/activate && \
+    pip install ~/kitti_lidar_semantics
+
+# copy script folder
+COPY --chown=default script script
+ENTRYPOINT ["/bin/bash", "/home/default/script/process_kitti.sh"]
 
