@@ -261,9 +261,8 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
 @click.argument('checkpoint')
 def main(kitti_root, output, checkpoint):
 
-    import py_riches
-    cartographer_script = (pathlib.Path(py_riches.__file__) / '..'
-                           / 'script' / 'run_cartographer_on_sequence.sh').resolve()
+    cartographer_script = (pathlib.Path(__file__) / '..' / '..' /
+                           'script' / 'run_cartographer_on_sequence.sh').resolve()
     if not cartographer_script.exists():
         raise RuntimeError("Cartographer script not found {}".format(cartographer_script))
 
