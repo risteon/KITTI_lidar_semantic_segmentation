@@ -155,25 +155,6 @@ RUN adduser default wgroup
 USER default
 WORKDIR /home/default
 
-# create virtual env for python3 with tensorflow
-RUN python3 -m venv p3env
-RUN \
-    set -ex; \
-    . p3env/bin/activate && \
-    pip install wheel && \
-    pip install tensorflow-gpu==1.13.1
-
-# copy tensorflow models
-COPY --chown=default models models
-# install models
-RUN \
-    set -ex; \
-    . p3env/bin/activate && \
-    pip install -e ~/models/research && \
-    pip install -e ~/models/research/slim
-
-RUN rm -rf ~/models
-
 # build google cartographer
 COPY --chown=default kitti2bag kitti2bag
 COPY --chown=default catkin_ws catkin_ws
@@ -187,8 +168,8 @@ RUN virtualenv p2env
 RUN \
     set -ex; \
     . p2env/bin/activate && \
-    pip install catkin_pkg pyyaml empy && \
-    pip install ~/kitti2bag
+    pip install --no-cache-dir catkin_pkg pyyaml empy && \
+    pip install --no-cache-dir ~/kitti2bag
 
 RUN /bin/bash -c \
     ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
@@ -198,7 +179,26 @@ RUN /bin/bash -c \
 RUN /bin/bash -c \
     ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
     cd ~/catkin_ws && \
-    catkin_make_isolated --install --use-ninja"
+    catkin_make_isolated --install --use-ninja && \
+    rm -rf ~/catkin_ws/build_isolated"
+
+# create virtual env for python3 with tensorflow
+RUN python3 -m venv p3env
+RUN \
+    set -ex; \
+    . p3env/bin/activate && \
+    pip install --no-cache-dir wheel && \
+    pip install --no-cache-dir tensorflow-gpu==1.13.1
+
+# copy tensorflow models
+COPY --chown=default models models
+# install models and delete unused folders that are large in size
+RUN \
+    set -ex; \
+    . p3env/bin/activate && \
+    pip install --no-cache-dir -e ~/models/research && \
+    pip install --no-cache-dir -e ~/models/research/slim && \
+    rm -rf ~/models/research/gan ~/models/research/syntaxnet ~/models/research/object_detection
 
 # copy and install python code for semantics generation and deeplab checkpoint
 COPY --chown=default deeplab_v3_checkpoint deeplab_v3_checkpoint
@@ -206,9 +206,13 @@ COPY --chown=default kitti_lidar_semantics kitti_lidar_semantics
 RUN \
     set -ex; \
     . p3env/bin/activate && \
-    pip install ~/kitti_lidar_semantics
+    pip install --no-cache-dir -e ~/kitti_lidar_semantics
+
+ENV LC_ALL=C.UTF-8
+ENV export LANG=C.UTF-8
 
 # copy script folder
 COPY --chown=default script script
 ENTRYPOINT ["/bin/bash", "/home/default/script/process_kitti.sh"]
+CMD []
 

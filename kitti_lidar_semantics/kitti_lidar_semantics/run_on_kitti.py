@@ -35,8 +35,6 @@ logger.addHandler(ch)
 
 KITTI_DAYS = ['2011_09_26', '2011_09_28', '2011_09_29', '2011_09_30', '2011_10_03', ]
 
-DEBUG = True
-
 
 def find_kitti_raw_sequences(kitti_root, kitti_days):
     for day in kitti_days:
@@ -144,12 +142,7 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
         err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
         return False, err
 
-    # tmp_dir = tempfile.mkdtemp(prefix='kitti_semantics_{}_{}'.format(sequence[0], sequence[1]))
-    # Todo DEBUG
-    assert DEBUG
-    tmp_dir = "/tmp/kitti_semantics_TMP"
-    # shutil.rmtree(tmp_dir)
-    pathlib.Path(tmp_dir).mkdir(exist_ok=True)
+    tmp_dir = tempfile.mkdtemp(prefix='kitti_semantics_{}_{}'.format(sequence[0], sequence[1]))
 
     logger.info("Writing to tmp directory {}".format(tmp_dir))
     tmp_dir = pathlib.Path(tmp_dir)
@@ -185,13 +178,6 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
         if subprocess.call([str(cartographer_script), str(kitti_root), str(tmp_dir), sequence[0],
                             sequence[1], str(processed_output)]):
             raise RuntimeError("Error when calling cartographer.")
-
-        # # Todo
-        # assert DEBUG
-        # path_sem_02 = pathlib.Path('/tmp/kitti_semantics_TMP/sem_deeplab71_90000_02')
-        # path_sem_03 = pathlib.Path('/tmp/kitti_semantics_TMP/sem_deeplab71_90000_03')
-        # sem_folder_02 = 'sem_deeplab71_90000_02'
-        # sem_folder_03 = 'sem_deeplab71_90000_03'
 
         # EGO MOTION CORRECTION + INTERPOLATION OF PROBS
         pykitti_obj = pykitti.raw(kitti_root, sequence[0], sequence[1])
@@ -249,9 +235,7 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
             f.write('failed ' + str(datetime.datetime.now()) + str(e))
         return False, str(e)
     finally:
-        # Todo DEBUG
-        assert DEBUG
-        # shutil.rmtree(tmp_dir)
+        shutil.rmtree(tmp_dir)
     return True, 'ok'
 
 
@@ -259,7 +243,8 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
 @click.argument('kitti_root')
 @click.argument('output')
 @click.argument('checkpoint')
-def main(kitti_root, output, checkpoint):
+@click.option('--day', default=None)
+def main(kitti_root, output, checkpoint, day):
 
     cartographer_script = (pathlib.Path(__file__) / '..' / '..' /
                            'script' / 'run_cartographer_on_sequence.sh').resolve()
@@ -270,19 +255,17 @@ def main(kitti_root, output, checkpoint):
                  pathlib.Path('hdl64_calib_corrections.xml')
     velo_calib = read_xml_config(calib_file)
 
+    if day is None:
+        kitti_days = KITTI_DAYS
+    else:
+        kitti_days = [day]
+
     kitti_root = pathlib.Path(kitti_root)
     output = pathlib.Path(output)
-    sequences = find_kitti_raw_sequences(kitti_root, KITTI_DAYS)
+    sequences = find_kitti_raw_sequences(kitti_root, kitti_days)
 
     with open(str(output / 'log_{}'.format(time.strftime("%Y%m%d-%H%M%S"))), 'w') as log_file:
         for s in sequences:
-            # Todo DEBUG
-            assert DEBUG
-            # s = sequences[22]
-            # s = sequences[65]
-            # s = sequences[141]
-            s = sequences[24]
-
             logger.info("Processing Sequence {}/{}".format(s[0], s[1]))
             succ, msg = process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib,
                                          output, s)
@@ -297,10 +280,6 @@ def main(kitti_root, output, checkpoint):
                 log_file.write('{}\n'.format(msg))
             except Exception as e:
                 print("Could not write log: {}".format(str(e)))
-
-            # # Todo DEBUG
-            assert DEBUG
-            break
 
 
 if __name__ == '__main__':
