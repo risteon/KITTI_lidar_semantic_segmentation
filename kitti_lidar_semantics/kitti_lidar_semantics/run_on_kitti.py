@@ -137,7 +137,7 @@ def check_paths(data):
                 raise FileNotFoundError("Not a file {}.".format(t))
 
 
-def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, output_dir, sequence):
+def process_sequence_a(checkpoint, kitti_root, cartographer_script, velo_calib, output_dir, sequence):
     count = get_raw_sequence_sample_count(sequence)
     if not count:
         err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
@@ -160,6 +160,32 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
         path_sem_03, sem_folder_03 = generate_stereo_semantics(
             tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='03')
 
+    except Exception as e:
+        print("Encountered an error. Skipping. Message: {}".format(str(e)))
+        shutil.rmtree(tmp_dir)
+        # create a fail marker
+        with open(str(processed_output / 'log'), 'w') as f:
+            f.write('failed ' + str(datetime.datetime.now()) + str(e))
+        return False, str(e)
+
+    data = [tmp_dir, path_sem_02, sem_folder_02, path_sem_03, sem_folder_03]
+    return True, data
+
+
+def process_sequence_b(checkpoint, kitti_root, cartographer_script, velo_calib, output_dir,
+                       sequence, data_from_sequence_a):
+    count = get_raw_sequence_sample_count(sequence)
+    if not count:
+        err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
+        return False, err
+
+    tmp_dir, path_sem_02, sem_folder_02, path_sem_03, sem_folder_03 = data_from_sequence_a
+    tmp_dir = pathlib.Path(tmp_dir)
+
+    day_folder, seq_folder = pathlib.Path(sequence[2]).parts[-2:]
+    processed_output = output_dir / day_folder / seq_folder
+
+    try:
         # PARTITION POINT CLOUDS
         # complete point cloud
         path_partitioned = processed_output / 'velodyne_points_partitioned'
@@ -267,8 +293,10 @@ def main(kitti_root, output, checkpoint, day):
     with open(str(output / 'log_{}'.format(time.strftime("%Y%m%d-%H%M%S"))), 'w') as log_file:
         for s in sequences:
             logger.info("Processing Sequence {}/{}".format(s[0], s[1]))
-            succ, msg = process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib,
-                                         output, s)
+            succ, data = process_sequence_a(checkpoint, kitti_root, cartographer_script, velo_calib,
+                                            output, s)
+            if succ:
+                
 
             if succ:
                 msg = '{} Processed KITTI sequence {}/{} successfully.'\
