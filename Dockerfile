@@ -168,7 +168,7 @@ RUN virtualenv p2env
 RUN \
     set -ex; \
     . p2env/bin/activate && \
-    pip install --no-cache-dir catkin_pkg pyyaml empy && \
+    pip install --no-cache-dir catkin_pkg pyyaml empy pykitti && \
     pip install --no-cache-dir ~/kitti2bag
 
 RUN /bin/bash -c \

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='kitti2bag',
@@ -14,5 +14,7 @@ setup(
     entry_points = {
         'console_scripts': ['kitti2bag=kitti2bag.__main__:main'],
     },
-    install_requires=['pykitti', 'progressbar2']
+    install_requires=['pykitti', 'progressbar2'],
+    include_package_data=True,
+    packages=find_packages(include=['kitti2bag']),
 )
