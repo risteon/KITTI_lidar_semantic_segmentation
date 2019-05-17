@@ -107,6 +107,7 @@ RUN set -ex && \
     apt-get install -y --no-install-recommends \
     ros-melodic-ros-base \
     ros-melodic-angles \
+    ros-melodic-cv-bridge \
     ros-melodic-eigen-conversions \
     ros-melodic-image-transport \
     ros-melodic-interactive-markers \
@@ -168,7 +169,7 @@ RUN virtualenv p2env
 RUN \
     set -ex; \
     . p2env/bin/activate && \
-    pip install --no-cache-dir catkin_pkg pyyaml empy pykitti && \
+    pip install --no-cache-dir catkin_pkg pyyaml empy opencv-python pykitti rospkg pycrypto gnupg && \
     pip install --no-cache-dir ~/kitti2bag
 
 RUN /bin/bash -c \
