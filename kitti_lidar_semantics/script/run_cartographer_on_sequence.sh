@@ -10,7 +10,7 @@ echo "KITTI SEQ: ${kitti_s}"
 echo "TMP DIR: ${tmp_dir}"
 echo "KITTI OUTPUT: ${kitti_output}"
 
-. "~/p2env/bin/activate"
+. ~/p2env/bin/activate
 source /opt/ros/melodic/setup.bash
 
 # after conda source because activate fails without $PS1 in bash strict mode
@@ -22,12 +22,12 @@ source install_isolated/setup.bash
 cd ${tmp_dir}
 kitti2bag -t ${kitti_day} -r ${kitti_s} --dir ${tmp_dir} raw_synced ${kitti_root} 
 
-cd /lhome/chrrist/workspace/cartographer/catkin_ws/install_isolated/bin
+cd ~/catkin_ws/install_isolated/bin
 # run cartographer in offline mode
 roslaunch cartographer_kitti offline_kitti_no_rviz.launch bag_filenames:=${tmp_dir}/kitti_${kitti_day}_drive_${kitti_s}_synced.bag
 
 # convert pbstream to bagfile
-cd /lhome/chrrist/workspace/cartographer/catkin_ws
+cd ~/catkin_ws
 cartographer_dev_pbstream_trajectories_to_rosbag -input ${tmp_dir}/kitti_${kitti_day}_drive_${kitti_s}_synced.bag.pbstream -output ${tmp_dir}/kitti_poses.bag
 # 
 mkdir -p ${kitti_output}/poses_cartographer
