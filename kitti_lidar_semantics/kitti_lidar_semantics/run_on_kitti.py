@@ -246,7 +246,8 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
 @click.argument('output')
 @click.argument('checkpoint')
 @click.option('--day', default=None)
-def main(kitti_root, output, checkpoint, day):
+@click.option('--start-at', default=None)
+def main(kitti_root, output, checkpoint, day, start_at):
 
     cartographer_script = (pathlib.Path(__file__) / '..' / '..' /
                            'script' / 'run_cartographer_on_sequence.sh').resolve()
@@ -266,6 +267,8 @@ def main(kitti_root, output, checkpoint, day):
     kitti_root = pathlib.Path(kitti_root)
     output = pathlib.Path(output)
     sequences = find_kitti_raw_sequences(kitti_root, kitti_days)
+    if start_at is not None:
+        sequences = [x for x in sequences if x[1] >= start_at]
 
     with open(str(output / 'log_{}'.format(time.strftime("%Y%m%d-%H%M%S"))), 'w') as log_file:
         for s in sequences:
