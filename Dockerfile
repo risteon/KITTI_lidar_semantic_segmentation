@@ -160,8 +160,9 @@ USER default
 WORKDIR /home/default
 
 # build google cartographer
-COPY --chown=default kitti2bag kitti2bag
 COPY --chown=default catkin_ws catkin_ws
+COPY --chown=default kitti2bag kitti2bag
+COPY --chown=default read_transform read_transform
 # remove cartographer rviz (not necessary)
 RUN \
     rm -rf ~/catkin_ws/src/cartographer_ros/cartographer_rviz
@@ -173,7 +174,8 @@ RUN \
     set -ex; \
     . p2env/bin/activate && \
     pip install --no-cache-dir catkin_pkg pyyaml empy opencv-python pykitti rospkg pycrypto gnupg && \
-    pip install --no-cache-dir ~/kitti2bag
+    pip install --no-cache-dir ~/kitti2bag && \
+    pip install --no-cache-dir ~/read_transform
 
 RUN /bin/bash -c \
     ". p2env/bin/activate && . /opt/ros/melodic/setup.bash && \
