@@ -2,14 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 """
-import datetime
+from datetime import datetime
 import operator
 import numpy as np
 import pathlib
 import os
 import math
 import typing
-from datetime import datetime
 from collections import deque
 import progressbar
 from PIL import Image
@@ -77,7 +76,7 @@ def read_timestamps_from_file(timestamps_filepath):
             if len(line) == 1:
                 continue
             try:
-                dt = datetime.datetime.strptime(line[:-4], '%Y-%m-%d %H:%M:%S.%f')
+                dt = datetime.strptime(line[:-4], '%Y-%m-%d %H:%M:%S.%f')
             except ValueError as e:
                 print(line)
                 print(i)

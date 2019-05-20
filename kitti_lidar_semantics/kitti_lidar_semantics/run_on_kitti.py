@@ -16,6 +16,7 @@ import subprocess
 import datetime
 import time
 import sys
+import traceback
 
 import deeplab
 from deeplab.vis import FLAGS as dl_flags
@@ -90,12 +91,12 @@ def make_rgb_semantics(input_folder, output_folder, checkpoint):
 def generate_stereo_semantics(tmp_dir, output_dir, checkpoint, sequence, expected_count,
                               input_suffix):
     checkpoint_iteration = pathlib.Path(checkpoint).name.split('-')[-1]
-    sem_folder_name = 'sem_deeplab71_{}_{}'.format(checkpoint_iteration, input_suffix)
+    sem_folder_name = 'sem_deeplab_v3+71_{}_{}'.format(checkpoint_iteration, input_suffix)
     output_path_tmp = tmp_dir / sem_folder_name
     output_path_tmp.mkdir(exist_ok=True, parents=True)
     output_path_tmp_data = output_path_tmp / 'data'
     output_path_sem = output_dir /\
-                      'sem_deeplab71_{}_{}'.format(checkpoint_iteration, input_suffix)
+                      'sem_deeplab_v3+71_{}_{}'.format(checkpoint_iteration, input_suffix)
     output_path_sem_data = output_path_sem / 'data'
 
     input_path = pathlib.Path(sequence[2]) / 'image_{}'.format(input_suffix)
@@ -228,10 +229,12 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
             f.write('complete ' + str(datetime.datetime.now()))
 
     except Exception as e:
+        tb = traceback.format_exc()
         print("Encountered an error. Skipping. Message: {}".format(str(e)))
         # create a fail marker
         with open(str(processed_output / 'log'), 'w') as f:
-            f.write('failed ' + str(datetime.datetime.now()) + str(e))
+            f.write('failed ' + str(datetime.datetime.now()) + ': ' + str(e))
+            f.write('\n{}'.format(tb))
         return False, str(e)
     finally:
         shutil.rmtree(tmp_dir)

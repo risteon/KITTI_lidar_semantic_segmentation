@@ -24,7 +24,7 @@ kitti2bag -t ${kitti_day} -r ${kitti_s} --dir ${tmp_dir} raw_synced ${kitti_root
 
 cd ~/catkin_ws/install_isolated/bin
 # run cartographer in offline mode
-roslaunch cartographer_kitti offline_kitti_no_rviz.launch bag_filenames:=${tmp_dir}/kitti_${kitti_day}_drive_${kitti_s}_synced.bag
+roslaunch cartographer_kitti kitti_offline_loc.launch bag_filenames:=${tmp_dir}/kitti_${kitti_day}_drive_${kitti_s}_synced.bag
 
 # convert pbstream to bagfile
 cd ~/catkin_ws

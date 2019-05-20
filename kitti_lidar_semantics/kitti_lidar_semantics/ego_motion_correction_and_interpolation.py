@@ -441,8 +441,8 @@ def make_example_proto(data_probs: np.ndarray, valid_mapping: np.ndarray) -> tf.
 
     feature_dict = {
         'probs_data': _float_array_feature(data_probs.flatten()),
-        'probs_shape': _int_array_feature(data_probs.shape),
-        'probs_mapping': _int_array_feature(valid_mapping),
+        'probs_shape': _int_array_feature(np.asarray(data_probs.shape, dtype=np.int64)),
+        'probs_mapping': _int_array_feature(valid_mapping.astype(np.int64)),
     }
     return tf.train.Example(features=tf.train.Features(feature=feature_dict))
 
@@ -486,7 +486,7 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
     output_path_pointcloud = data_target / 'velodyne_points_corrected' / 'data'
     output_path_pointcloud.mkdir(parents=True, exist_ok=True)
     # output folder for semantic probabilities
-    output_path_probs = data_target / 'semantic_probs_pointwise_deeplab_v3+'
+    output_path_probs = data_target / 'lidar_semantics_deeplab_v3+71_90000'
     output_path_probs.mkdir(parents=False, exist_ok=True)
     # output folder for debug images
     output_path_debug = data_target / 'debug'
