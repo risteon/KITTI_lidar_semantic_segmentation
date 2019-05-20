@@ -11,10 +11,15 @@ ENV all_proxy="${DOCKER_PROXY}"
 # set the device order to match nvidia-smi
 ENV CUDA_DEVICE_ORDER="PCI_BUS_ID"
 
+# avoid user interaction when installing tzdata
+ENV TZ=Europe/Minsk
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # following https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/dockerfiles/dockerfiles/gpu.Dockerfile
 RUN set -ex && \
     # install debian packages
     apt-get update && apt-get install -y --no-install-recommends --allow-downgrades --allow-change-held-packages \
+    apt-utils \
     build-essential \
     cuda-command-line-tools-10-0 \
     cuda-cublas-10-0 \
@@ -42,14 +47,14 @@ RUN set -ex && \
 RUN echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list
 COPY ros.key /ros.key
 RUN cat /ros.key | apt-key add -
-# avoid user interaction when installing tzdata
-ENV TZ=Europe/Minsk
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN apt-get update
+RUN set -ex && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    ros-melodic-ros-base
+
 # install prerequisities
 RUN set -ex && \
-    apt-get install -y --no-install-recommends \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     libtinyxml-dev \
     liburdfdom-dev \
     liburdfdom-headers-dev \
@@ -102,10 +107,8 @@ RUN set -ex && \
     sip-dev \
     ninja-build
 
-# install ROS
 RUN set -ex && \
-    apt-get install -y --no-install-recommends \
-    ros-melodic-ros-base \
+    apt-get update && apt-get install -y --no-install-recommends \
     ros-melodic-angles \
     ros-melodic-cv-bridge \
     ros-melodic-eigen-conversions \
