@@ -215,7 +215,9 @@ RUN \
     pip install --no-cache-dir -e ~/kitti_lidar_semantics
 
 ENV LC_ALL=C.UTF-8
-ENV export LANG=C.UTF-8
+ENV LANG=C.UTF-8
+ENV CARTOGRAPHER_CATKIN_WS="/home/default/catkin_ws"
+ENV CARTOGRAPHER_ENV="/home/default/p2env/"
 
 # copy script folder
 COPY --chown=default script script
