@@ -14,7 +14,7 @@ $ sudo docker run -it \
     kitti_lidar_semantics:base
 ```
 
-# Optional: specify day to process
+# Optional: specify day to process and sequence number to start from
 ```
---day 2011_09_29
+$ ... 2011_09_29 0011
 ```
