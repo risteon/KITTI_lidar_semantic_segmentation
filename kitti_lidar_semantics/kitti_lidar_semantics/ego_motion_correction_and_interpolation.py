@@ -24,7 +24,10 @@ from .utils import \
     read_timestamps_from_file, \
     read_png_image, \
     get_image_size, \
-    write_binary_point_cloud_with_intensity
+    write_binary_point_cloud_with_intensity, \
+    onehot_initialization, \
+    Label, \
+    labels
 from .utils import find_jumps
 
 
@@ -43,11 +46,16 @@ T_START = 'trans '
 R_START = ' rot '
 NUM_SECTORS_PER_REV = 90
 
+train_labels = sorted([x for x in labels if x.ignoreInEval is False],
+                      key=lambda x: x.trainId)
+train_colors = np.stack(x.color for x in train_labels).astype(np.uint8)
+
 DEBUG = True
 
 
 def make_debug_image(image: np.ndarray, img_coords: np.ndarray, valid_mask: np.ndarray,
-                     point_cloud: np.ndarray, sem_image: np.ndarray = None, postfix: str = ''):
+                     point_cloud: np.ndarray, per_image_probs: np.ndarray,
+                     valid_mapping: np.ndarray, sem_image: np.ndarray = None):
     from PIL import Image
     import colorsys
 
@@ -56,12 +64,16 @@ def make_debug_image(image: np.ndarray, img_coords: np.ndarray, valid_mask: np.n
                      for v in colorsys.hsv_to_rgb((d % 20.0) / 20.0, 1.0, 1.0))
 
     # original coordinates
-    xyz = point_cloud[:, :3][valid_mask]
-    dist = np.linalg.norm(xyz, axis=-1)
+    # xyz = point_cloud[:, :3][valid_mask]
+    # dist = np.linalg.norm(xyz, axis=-1)
     disp = img_coords[valid_mask]
 
     img = Image.fromarray(image)
     img = img.resize(tuple(x * 2 for x in img.size))
+
+    # semantic coloring, merge images
+    per_image_probs = np.mean(per_image_probs, axis=0)
+    point_colors = np.round(np.matmul(per_image_probs, train_colors)).astype(np.uint8)
 
     # blend if semantic segmentation is available
     if sem_image is not None:
@@ -72,18 +84,17 @@ def make_debug_image(image: np.ndarray, img_coords: np.ndarray, valid_mask: np.n
 
         img = img.convert('RGBA')
         img_sem = img_sem.convert('RGBA')
-        img = Image.blend(img, img_sem, alpha=.6)
+        img = Image.blend(img, img_sem, alpha=0.6)
 
     # draw LiDAR measurments
     px = img.load()
-    for uv, d in zip(disp, dist):
+    for uv, c in zip(disp, point_colors):
         # do not catch IndexError
-        px[int(uv[0] * 2.0), int(uv[1] * 2.0)] = make_color(d)
+        # color using distance
+        # px[int(uv[0] * 2.0), int(uv[1] * 2.0)] = make_color(d)
+        # color using probs
+        px[int(uv[0] * 2.0), int(uv[1] * 2.0)] = tuple(c)
 
-    # save image
-    # filename = '/tmp/f/autolabeling_debug_{}.png'.format(postfix)
-    # img.save(filename)
-    # print("Created debug image {}.".format(filename))
     return img
 
 
@@ -119,8 +130,8 @@ def project_onto_image(point_cloud: np.ndarray, image_shape: tuple,
 
 def interpolate(targets: np.ndarray, data: np.ndarray, target_size: np.ndarray):
     # data is [Channel, Height, Width]
-    x = np.linspace(0.5, target_size[1] - 0.5, data.shape[1])
-    y = np.linspace(0.5, target_size[0] - 0.5, data.shape[2])
+    x = np.linspace(0.5, target_size[0] - 0.5, data.shape[1])
+    y = np.linspace(0.5, target_size[1] - 0.5, data.shape[2])
 
     output = np.empty(shape=[data.shape[0], targets.shape[0]], dtype=data.dtype)
 
@@ -142,18 +153,6 @@ def fuse(interpolated: np.ndarray):
 
 def calc_image_consensus(interpolated: np.ndarray):
     n_points = interpolated.shape[-1]
-
-    # https://stackoverflow.com/a/46103129/ @Divakar
-    def all_idx(idx, axis):
-        grid = np.ogrid[tuple(map(slice, idx.shape))]
-        grid.insert(axis, idx)
-        return tuple(grid)
-
-    # https://stackoverflow.com/questions/36960320/convert-a-2d-matrix-to-a-3d-one-hot-matrix-numpy
-    def onehot_initialization(a, ncols):
-        out = np.zeros(a.shape + (ncols,), dtype=np.uint8)
-        out[all_idx(a, axis=3)] = 1
-        return out
 
     # per image mean fusion
     per_image_fused = np.mean(interpolated, axis=1)
@@ -214,6 +213,7 @@ def interpolate_and_fuse(image_coords: typing.List[np.ndarray],
             target_size = sem.get('output_size', sem['target_size'])
             results[i, j, ...] = interpolate(targets=valid_coords, data=prob[str(s)],
                                              target_size=target_size)
+
     return results, valid_mapping
 
 
@@ -266,7 +266,8 @@ def partition_timestamps(dt: datetime, dt_start: datetime, dt_end: datetime, azi
 def correct_ego_motion(point_cloud: np.ndarray, poses_interpolator, t, t_start, t_end,
         velo_calib, zero_time, auto_correct: bool):
 
-    sensorhead_azimuth, row_mapping = calc_sensor_head_azimuth(point_cloud, calib=velo_calib, auto_correct=auto_correct)
+    sensorhead_azimuth, row_mapping = calc_sensor_head_azimuth(point_cloud, calib=velo_calib,
+                                                               auto_correct=auto_correct)
     # 1) create bins to include every point (more than 360 degrees necessary because of correction)
     num_sectors_with_overlap = NUM_SECTORS_PER_REV + NUM_SECTORS_PER_REV // 8 + 2
     total_angle_with_overlap = num_sectors_with_overlap / NUM_SECTORS_PER_REV * math.pi
@@ -401,6 +402,7 @@ def process_single_example(i, path_pointcloud, path_img_02, path_img_03, path_se
             dict(np.load(path_sem_02)),
             dict(np.load(path_sem_03)),
         ]
+        # RETURNS: [images x scales x channels x points]
         interpolated_probs, valid_mapping = interpolate_and_fuse(
             [img_coords_02, img_coords_03], valid_mask, sem_probs, scales, channels_last)
         # RESULTS: [images x points x channels]
@@ -418,12 +420,14 @@ def process_single_example(i, path_pointcloud, path_img_02, path_img_03, path_se
             sem_img_02 = read_png_image(path_sem_img_02)
             debug_img_02 = make_debug_image(image_02, img_coords_02, valid_mask, x,
                                             sem_image=sem_img_02,
-                                            postfix='debug_img_02_{}_{:05d}'.format(desc, i))
+                                            per_image_probs=per_image_probs,
+                                            valid_mapping=valid_mapping)
             image_03 = read_png_image(path_img_03)
             sem_img_03 = read_png_image(path_sem_img_03)
             debug_img_03 = make_debug_image(image_03, img_coords_03, valid_mask, x,
                                             sem_image=sem_img_03,
-                                            postfix='debug_img_03_{}_{:05d}'.format(desc, i))
+                                            per_image_probs=per_image_probs,
+                                            valid_mapping=valid_mapping)
             debug_img = debug_img_02, debug_img_03
         else:
             debug_img = None

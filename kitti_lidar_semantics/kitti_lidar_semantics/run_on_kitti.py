@@ -120,10 +120,16 @@ def generate_stereo_semantics(tmp_dir, output_dir, checkpoint, sequence, expecte
             tid.write(png.read_bytes())
 
     # copy timestamps
-    with (output_path_tmp / 'timestamps.txt').open(mode='xb') as tid:
-        tid.write((input_path / 'timestamps.txt').read_bytes())
-    with (output_path_sem / 'timestamps.txt').open(mode='xb') as tid:
-        tid.write((input_path / 'timestamps.txt').read_bytes())
+    try:
+        with (output_path_tmp / 'timestamps.txt').open(mode='xb') as tid:
+            tid.write((input_path / 'timestamps.txt').read_bytes())
+    except FileExistsError:
+        pass
+    try:
+        with (output_path_sem / 'timestamps.txt').open(mode='xb') as tid:
+            tid.write((input_path / 'timestamps.txt').read_bytes())
+    except FileExistsError:
+        pass
 
     return output_path_tmp, sem_folder_name
 
@@ -145,7 +151,6 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
         return False, err
 
     tmp_dir = tempfile.mkdtemp(prefix='kitti_semantics_{}_{}'.format(sequence[0], sequence[1]))
-
     logger.info("Writing to tmp directory {}".format(tmp_dir))
     tmp_dir = pathlib.Path(tmp_dir)
 
