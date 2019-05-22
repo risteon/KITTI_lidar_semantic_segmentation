@@ -192,7 +192,7 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
     count = get_raw_sequence_sample_count(sequence)
     if not count:
         err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
-        results.extend([False, err])
+        results.extend([False, err, sequence])
         return
 
     tmp_dir, path_sem_02, sem_folder_02, path_sem_03, sem_folder_03 = data_from_part_a
@@ -280,11 +280,11 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
             f.write('failed ' + str(datetime.datetime.now()) + ': ' + str(e))
             f.write('\n{}'.format(tb))
 
-        results.extend([False, str(e)])
+        results.extend([False, str(e), sequence])
         return
     finally:
         shutil.rmtree(tmp_dir)
-    results.extend([True, 'ok'])
+    results.extend([True, 'ok', sequence])
     return
 
 
@@ -323,14 +323,14 @@ def main(kitti_root, output, checkpoint, day, start_at):
     def wait_for_part_b(thread_ego_motion, log_file, results):
         if thread_ego_motion is not None:
             thread_ego_motion.join()
-            assert len(results) == 2
-            succ_part_b, msg_part_b = results
+            assert len(results) == 3
+            succ_part_b, msg_part_b, b_sequence = results
             if succ_part_b:
                 msg_part_b = '{} Processed KITTI sequence {}/{} PART B successfully.' \
-                    .format(str(datetime.datetime.now()), s[0], s[1])
+                    .format(str(datetime.datetime.now()), b_sequence[0], b_sequence[1])
             else:
                 msg_part_b = '{} Failed on KITTI sequence {}/{} PART B: {}.' \
-                    .format(str(datetime.datetime.now()), s[0], s[1], msg_part_b)
+                    .format(str(datetime.datetime.now()), b_sequence[0], b_sequence[1], msg_part_b)
             try:
                 log_file.write('{}\n'.format(msg_part_b))
             except Exception as e:
