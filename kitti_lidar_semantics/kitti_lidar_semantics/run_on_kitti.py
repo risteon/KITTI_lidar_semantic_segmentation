@@ -17,6 +17,7 @@ import datetime
 import time
 import sys
 import traceback
+import threading
 
 import deeplab
 from deeplab.vis import FLAGS as dl_flags
@@ -144,7 +145,9 @@ def check_paths(data):
                 raise FileNotFoundError("Not a file {}.".format(t))
 
 
-def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, output_dir, sequence):
+def process_sequence_part_a(checkpoint, kitti_root, cartographer_script, velo_calib, output_dir,
+                            sequence):
+    logger.info("Processing Sequence {}/{} PART A".format(sequence[0], sequence[1]))
     count = get_raw_sequence_sample_count(sequence)
     if not count:
         err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
@@ -168,6 +171,36 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
         path_sem_03, sem_folder_03 = generate_stereo_semantics(
             tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='03')
 
+    except Exception as e:
+        tb = traceback.format_exc()
+        print("Encountered an error. Skipping. Message: {}".format(str(e)))
+        # create a fail marker
+        with open(str(processed_output / 'log'), 'w') as f:
+            f.write('failed ' + str(datetime.datetime.now()) + ': ' + str(e))
+            f.write('\n{}'.format(tb))
+        # delete tmp in case of error. Otherwise will be removed when part_b has finished
+        shutil.rmtree(tmp_dir)
+        return False, str(e)
+
+    data = [tmp_dir, path_sem_02, sem_folder_02, path_sem_03, sem_folder_03]
+    return True, data
+
+
+def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, velo_calib,
+                            output_dir, sequence, results):
+    logger.info("Processing Sequence {}/{} PART B".format(sequence[0], sequence[1]))
+    count = get_raw_sequence_sample_count(sequence)
+    if not count:
+        err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
+        results.extend([False, err])
+        return
+
+    tmp_dir, path_sem_02, sem_folder_02, path_sem_03, sem_folder_03 = data_from_part_a
+
+    day_folder, seq_folder = pathlib.Path(sequence[2]).parts[-2:]
+    processed_output = output_dir / day_folder / seq_folder
+
+    try:
         # PARTITION POINT CLOUDS
         logger.info("Partitioning point clouds.")
         # complete point cloud
@@ -246,10 +279,13 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
         with open(str(processed_output / 'log'), 'w') as f:
             f.write('failed ' + str(datetime.datetime.now()) + ': ' + str(e))
             f.write('\n{}'.format(tb))
-        return False, str(e)
+
+        results.extend([False, str(e)])
+        return
     finally:
         shutil.rmtree(tmp_dir)
-    return True, 'ok'
+    results.extend([True, 'ok'])
+    return
 
 
 @click.command()
@@ -281,22 +317,56 @@ def main(kitti_root, output, checkpoint, day, start_at):
     if start_at is not None:
         sequences = [x for x in sequences if x[1] >= start_at]
 
-    with open(str(output / 'log_{}'.format(time.strftime("%Y%m%d-%H%M%S"))), 'w') as log_file:
-        for s in sequences:
-            logger.info("Processing Sequence {}/{}".format(s[0], s[1]))
-            succ, msg = process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib,
-                                         output, s)
+    thread_ego_motion = None
+    results = []
 
-            if succ:
-                msg = '{} Processed KITTI sequence {}/{} successfully.'\
+    def wait_for_part_b(thread_ego_motion, log_file, results):
+        if thread_ego_motion is not None:
+            thread_ego_motion.join()
+            assert len(results) == 2
+            succ_part_b, msg_part_b = results
+            if succ_part_b:
+                msg_part_b = '{} Processed KITTI sequence {}/{} PART B successfully.' \
                     .format(str(datetime.datetime.now()), s[0], s[1])
             else:
-                msg = '{} Failed on KITTI sequence {}/{}: {}.'\
+                msg_part_b = '{} Failed on KITTI sequence {}/{} PART B: {}.' \
+                    .format(str(datetime.datetime.now()), s[0], s[1], msg_part_b)
+            try:
+                log_file.write('{}\n'.format(msg_part_b))
+            except Exception as e:
+                print("Could not write log: {}".format(str(e)))
+            results.clear()
+
+    with open(str(output / 'log_{}'.format(time.strftime("%Y%m%d-%H%M%S"))), 'w') as log_file:
+        for s in sequences:
+
+            succ, msg = process_sequence_part_a(checkpoint, kitti_root,
+                                                cartographer_script, velo_calib,
+                                                output, s)
+            if succ:
+                data_part_a = msg
+                msg = '{} Processed KITTI sequence {}/{} PART A successfully.'\
+                    .format(str(datetime.datetime.now()), s[0], s[1])
+
+                # maximum of one parallel part b thread. Wait if not already finished.
+                wait_for_part_b(thread_ego_motion, log_file, results)
+                thread_ego_motion = threading.Thread(
+                    target=process_sequence_part_b,
+                    name='thread_{}_{}'.format(s[0], s[1]),
+                    args=(data_part_a, kitti_root, cartographer_script, velo_calib, output, s,
+                          results))
+                thread_ego_motion.start()
+
+            else:
+                msg = '{} Failed on KITTI sequence {}/{} PART A: {}.'\
                     .format(str(datetime.datetime.now()), s[0], s[1], msg)
             try:
                 log_file.write('{}\n'.format(msg))
+                log_file.flush()
             except Exception as e:
                 print("Could not write log: {}".format(str(e)))
+
+        wait_for_part_b(thread_ego_motion, log_file, results)
 
 
 if __name__ == '__main__':
