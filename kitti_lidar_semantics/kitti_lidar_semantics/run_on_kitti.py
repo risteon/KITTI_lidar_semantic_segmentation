@@ -161,8 +161,10 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
 
     try:
         # RGB SEMANTICS
+        logger.info("Creating RGB semantics for left image 02.")
         path_sem_02, sem_folder_02 = generate_stereo_semantics(
             tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='02')
+        logger.info("Creating RGB semantics for right image 03.")
         path_sem_03, sem_folder_03 = generate_stereo_semantics(
             tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='03')
 
@@ -179,7 +181,7 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
                               velo_calib=velo_calib)
 
         # CARTOGRAPHER
-        print("Running cartographer")
+        logger.info("Running cartographer.")
         if subprocess.call([str(cartographer_script), str(kitti_root), str(tmp_dir), sequence[0],
                             sequence[1], str(processed_output)]):
             raise RuntimeError("Error when calling cartographer.")
