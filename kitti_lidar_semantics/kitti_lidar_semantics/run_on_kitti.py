@@ -169,6 +169,7 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
             tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='03')
 
         # PARTITION POINT CLOUDS
+        logger.info("Partitioning point clouds.")
         # complete point cloud
         path_partitioned = processed_output / 'velodyne_points_partitioned'
         path_partitioned.mkdir(parents=True, exist_ok=True)
@@ -182,8 +183,11 @@ def process_sequence(checkpoint, kitti_root, cartographer_script, velo_calib, ou
 
         # CARTOGRAPHER
         logger.info("Running cartographer.")
+        # redirect output ...
+        stdout = open(str(tmp_dir / "stdout.txt"), "wb")
+        stderr = open(str(tmp_dir / "stderr.txt"), "wb")
         if subprocess.call([str(cartographer_script), str(kitti_root), str(tmp_dir), sequence[0],
-                            sequence[1], str(processed_output)]):
+                            sequence[1], str(processed_output)], stdout=stdout, stderr=stderr):
             raise RuntimeError("Error when calling cartographer.")
 
         # EGO MOTION CORRECTION + INTERPOLATION OF PROBS
