@@ -155,7 +155,11 @@ def partition_timestamps(dt: datetime, dt_start: datetime, dt_end: datetime, azi
 
 
 def save_velo_data_stream(velodyne_data_folder, velodyne_target_folder,
-                          velodyne_target_folder2, velo_calib):
+                          velodyne_target_folder2, velo_calib,
+                          missing_files: typing.Set[int] = None):
+    if missing_files is None:
+        missing_files = set()
+
     num_sectors = 90
     print("Exporting velodyne data")
     velo_data_dir = os.path.join(velodyne_data_folder, 'data')
@@ -213,24 +217,28 @@ def save_velo_data_stream(velodyne_data_folder, velodyne_target_folder,
             counter2 += 1
 
     with open(timestamps_target_path, 'w') as timestamps_file:
-        for i, (dt, dt_start, dt_end, filename) in bar(enumerate(zip(velo_datetimes, velo_datetimes_start,
-                                                      velo_datetimes_end, velo_filenames))):
+        for i, (dt, dt_start, dt_end, filename) in bar(enumerate(zip(velo_datetimes,
+                                                                     velo_datetimes_start,
+                                                                     velo_datetimes_end,
+                                                                     velo_filenames))):
             if dt is None:
                 raise RuntimeError("Dt is None {}".format(filename))
-            velo_filename = os.path.join(velo_data_dir, filename)
-            # read binary data
-            scan = (np.fromfile(velo_filename, dtype=np.float32)).reshape(-1, 4)
-            azimuth = np.arctan2(scan[:, 1], scan[:, 0])
-
-            try:
-                time_corrected_azimuth, row_mapping = time_correct_azimuth(azimuth, scan,
-                                                                           calib=velo_calib,
-                                                                           auto_correct_rows=(i != len(velo_filenames) - 1))
-            except RuntimeError as e:
-                raise RuntimeError("{}: {}".format(filename, str(e)))
-
-            # _, row_count = np.unique(row_mapping, return_counts=True)
-            # row_counts.append(row_count)
+            if i in missing_files:
+                # insert empty scan and empty azimuth list
+                scan = np.empty(shape=(0, 4), dtype=np.float32)
+                time_corrected_azimuth = np.empty(shape=(0, ), dtype=np.float32)
+            else:
+                velo_filename = os.path.join(velo_data_dir, filename)
+                # read binary data
+                scan = (np.fromfile(velo_filename, dtype=np.float32)).reshape(-1, 4)
+                azimuth = np.arctan2(scan[:, 1], scan[:, 0])
+                try:
+                    time_corrected_azimuth, row_mapping = time_correct_azimuth(
+                        azimuth, scan,
+                        calib=velo_calib,
+                        auto_correct_rows=(i != len(velo_filenames) - 1))
+                except RuntimeError as e:
+                    raise RuntimeError("{}: {}".format(filename, str(e)))
 
             data.append((time_corrected_azimuth, scan, (dt, dt_start, dt_end)))
             if data[1][1] is not None:

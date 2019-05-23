@@ -54,14 +54,19 @@ def find_kitti_raw_sequences(kitti_root, kitti_days):
 
 
 def get_raw_sequence_sample_count(sequence):
-    len_img2 = len(os.listdir(pathlib.Path(sequence[2]) / 'image_02' / 'data'))
-    len_img3 = len(os.listdir(pathlib.Path(sequence[2]) / 'image_03' / 'data'))
-    len_velo = len(os.listdir(pathlib.Path(sequence[2]) / 'velodyne_points' / 'data'))
-    len_oxts = len(os.listdir(pathlib.Path(sequence[2]) / 'oxts' / 'data'))
-    if not (len_img2 == len_img3 == len_velo == len_oxts):
-        return None
+    sequence_root = pathlib.Path(sequence[2])
+    data = ['image_02', 'image_03', 'velodyne_points', 'oxts']
+    files = [sorted(list((sequence_root / x / 'data').iterdir())) for x in data]
+    lenghts = [len(x) for x in files]
+    stems = [[y.stem for y in x] for x in files]
 
-    return len_img2
+    missing = {k: set() for k in data}
+    for i in range(max(lenghts)):
+        for x, src in zip(stems, data):
+            if '{:010d}'.format(i) not in x:
+                logger.warning("Sample #{} missing in {}".format(i, src))
+                missing[src].add(i)
+    return max(lenghts), missing
 
 
 def make_rgb_semantics(input_folder, output_folder, checkpoint):
@@ -132,7 +137,7 @@ def generate_stereo_semantics(tmp_dir, output_dir, checkpoint, sequence, expecte
     except FileExistsError:
         pass
 
-    return output_path_tmp, sem_folder_name
+    return sem_folder_name
 
 
 def check_paths(data):
@@ -148,8 +153,8 @@ def check_paths(data):
 def process_sequence_part_a(checkpoint, kitti_root, cartographer_script, velo_calib, output_dir,
                             sequence):
     logger.info("Processing Sequence {}/{} PART A".format(sequence[0], sequence[1]))
-    count = get_raw_sequence_sample_count(sequence)
-    if not count:
+    count, missing = get_raw_sequence_sample_count(sequence)
+    if any(v for v in missing.values()) and len(missing['velodyne_points']) > 5:
         err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
         return False, err
 
@@ -165,10 +170,10 @@ def process_sequence_part_a(checkpoint, kitti_root, cartographer_script, velo_ca
     try:
         # RGB SEMANTICS
         logger.info("Creating RGB semantics for left image 02.")
-        path_sem_02, sem_folder_02 = generate_stereo_semantics(
+        sem_folder_02 = generate_stereo_semantics(
             tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='02')
         logger.info("Creating RGB semantics for right image 03.")
-        path_sem_03, sem_folder_03 = generate_stereo_semantics(
+        sem_folder_03 = generate_stereo_semantics(
             tmp_dir, processed_output, checkpoint, sequence, count, input_suffix='03')
 
     except Exception as e:
@@ -182,20 +187,16 @@ def process_sequence_part_a(checkpoint, kitti_root, cartographer_script, velo_ca
         shutil.rmtree(tmp_dir)
         return False, str(e)
 
-    data = [tmp_dir, path_sem_02, sem_folder_02, path_sem_03, sem_folder_03]
+    data = [tmp_dir, sem_folder_02, sem_folder_03, missing]
     return True, data
 
 
 def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, velo_calib,
                             output_dir, sequence, results):
     logger.info("Processing Sequence {}/{} PART B".format(sequence[0], sequence[1]))
-    count = get_raw_sequence_sample_count(sequence)
-    if not count:
-        err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
-        results.extend([False, err, sequence])
-        return
-
-    tmp_dir, path_sem_02, sem_folder_02, path_sem_03, sem_folder_03 = data_from_part_a
+    tmp_dir, sem_folder_02, sem_folder_03, missing = data_from_part_a
+    path_sem_02 = tmp_dir / sem_folder_02
+    path_sem_03 = tmp_dir / sem_folder_03
 
     day_folder, seq_folder = pathlib.Path(sequence[2]).parts[-2:]
     processed_output = output_dir / day_folder / seq_folder
@@ -212,7 +213,7 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
         save_velo_data_stream(velodyne_data_folder=pathlib.Path(sequence[2]) / 'velodyne_points',
                               velodyne_target_folder=str(path_partitioned),
                               velodyne_target_folder2=str(path_partitioned2),
-                              velo_calib=velo_calib)
+                              velo_calib=velo_calib, missing_files=missing['velodyne_points'])
 
         # CARTOGRAPHER
         logger.info("Running cartographer.")
@@ -266,7 +267,8 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
         logger.info("Starting Ego-Motion correction and interpolation")
         do_work(pykitti_obj, data_src=data, data_target=processed_output, velo_calib=velo_calib,
                 scales=['0.25_a', '0.25_b', '0.75_a', '0.75_b', '2.0_a', '2.0_b'],
-                channels_last=True)
+                channels_last=True,
+                missing_files=missing)
 
         # create a success marker
         with open(str(processed_output / 'log'), 'w') as f:
@@ -283,7 +285,9 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
         results.extend([False, str(e), sequence])
         return
     finally:
-        shutil.rmtree(tmp_dir)
+        # Todo DEBUG
+        pass
+        # shutil.rmtree(tmp_dir)
     results.extend([True, 'ok', sequence])
     return
 
@@ -361,6 +365,7 @@ def main(kitti_root, output, checkpoint, day, start_at):
                 msg = '{} Failed on KITTI sequence {}/{} PART A: {}.'\
                     .format(str(datetime.datetime.now()), s[0], s[1], msg)
             try:
+                logger.info(msg)
                 log_file.write('{}\n'.format(msg))
                 log_file.flush()
             except Exception as e:

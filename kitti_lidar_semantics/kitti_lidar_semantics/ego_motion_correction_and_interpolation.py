@@ -223,10 +223,6 @@ def get_files(data_src, *args) -> typing.Dict[str, np.ndarray]:
                        if x.endswith(data_src[k].file_extension)])
         for k in args
     }
-    it = iter(d.values())
-    target_len = len(next(it))
-    if not all(len(i) == target_len for i in it):
-        raise ValueError("File lists do not have the same length.")
     return d
 
 
@@ -452,7 +448,8 @@ def make_example_proto(data_probs: np.ndarray, valid_mapping: np.ndarray) -> tf.
 
 
 def do_work(kitti, data_src, data_target, velo_calib, scales,
-            enable_ego_motion_correction=True, progress_bar=True, channels_last=True):
+            enable_ego_motion_correction=True, progress_bar=True, channels_last=True,
+            missing_files=None):
     """
     Process a single KITTI RAW sequence
     :param kitti:
@@ -470,6 +467,18 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
     filenames = get_files(data_src,
                           'velodyne', 'image_02', 'image_03', 'semantics_02', 'semantics_03',
                           'semantics_visual_02', 'semantics_visual_03',)
+
+    # insert None for missing velodyne point clouds
+    if missing_files['velodyne_points']:
+        f_velodyne = list(filenames['velodyne'])
+        for i in missing_files['velodyne_points']:
+            f_velodyne.insert(i, None)
+        filenames['velodyne_points'] = np.asarray(f_velodyne)
+
+    it = iter(filenames.values())
+    target_len = len(next(it))
+    if not all(len(i) == target_len for i in it):
+        raise ValueError("File lists do not have the same length.")
 
     target_len = len(filenames['velodyne'])
     if target_len != len(image_datetimes) != len(velo_datetimes[0]) != len(velo_datetimes[1]) != \
@@ -530,30 +539,31 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
             samples_written_in_file = 0
             while True:  # < loop over samples in current file
 
-                point_cloud_corrected, probs, mapping, stats, debug_imgs = process_single_example(
-                    i,
-                    filenames['velodyne'][i], filenames['image_02'][i], filenames['image_03'][i],
-                    filenames['semantics_02'][i], filenames['semantics_03'][i],
-                    filenames['semantics_visual_02'][i], filenames['semantics_visual_03'][i],
-                    scales, poses_interpolator, kitti, timestamps=(v[i] for v in velo_datetimes),
-                    velo_calib=velo_calib, zero_time=zero_time,
-                    enable_ego_motion_correction=enable_ego_motion_correction,
-                    channels_last=channels_last,
-                    last_example=i == target_len - 1
-                )
-                # write ego motion corrected point cloud
-                write_binary_point_cloud_with_intensity(str(output_path_pointcloud /
-                                                            '{:010d}.bin'.format(i)),
-                                                        point_cloud_corrected)
-                # write semantic predictions as tfrecord
-                writer.write(make_example_proto(probs, mapping).SerializeToString())
-                # save stats
-                statistics['concensus_mean'][i] = stats[2]
-                statistics['concensus_vote'][i] = stats[3]
-                # debug images
-                if debug_imgs:
-                    debug_imgs[0].save(str(output_path_debug / 'debug_02_{:05d}.png'.format(i)))
-                    debug_imgs[1].save(str(output_path_debug / 'debug_03_{:05d}.png'.format(i)))
+                if i not in missing_files['velodyne_points']:
+                    point_cloud_corrected, probs, mapping, stats, debug_imgs = process_single_example(
+                        i,
+                        filenames['velodyne'][i], filenames['image_02'][i], filenames['image_03'][i],
+                        filenames['semantics_02'][i], filenames['semantics_03'][i],
+                        filenames['semantics_visual_02'][i], filenames['semantics_visual_03'][i],
+                        scales, poses_interpolator, kitti, timestamps=(v[i] for v in velo_datetimes),
+                        velo_calib=velo_calib, zero_time=zero_time,
+                        enable_ego_motion_correction=enable_ego_motion_correction,
+                        channels_last=channels_last,
+                        last_example=i == target_len - 1
+                    )
+                    # write ego motion corrected point cloud
+                    write_binary_point_cloud_with_intensity(str(output_path_pointcloud /
+                                                                '{:010d}.bin'.format(i)),
+                                                            point_cloud_corrected)
+                    # write semantic predictions as tfrecord
+                    writer.write(make_example_proto(probs, mapping).SerializeToString())
+                    # save stats
+                    statistics['concensus_mean'][i] = stats[2]
+                    statistics['concensus_vote'][i] = stats[3]
+                    # debug images
+                    if debug_imgs:
+                        debug_imgs[0].save(str(output_path_debug / 'debug_02_{:05d}.png'.format(i)))
+                        debug_imgs[1].save(str(output_path_debug / 'debug_03_{:05d}.png'.format(i)))
 
                 # looping
                 if progressbar is not None:
