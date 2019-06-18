@@ -124,7 +124,7 @@ def partition_pointcloud(data: typing.Deque[typing.Tuple[np.ndarray, np.ndarray]
     assert len(data) == 3
     bins = np.linspace(-math.pi, math.pi, num_sectors+1)
     clouds = [[] for _ in range(num_sectors)]
-    for i, (a, cloud, _) in zip(range(-1, 2), data):
+    for i, (a, cloud, _, _) in zip(range(-1, 2), data):
         if cloud is None:
             continue
         # move azimuth angles: previous scan (i == -1) is -2pi ahead, following scan +2pi late
@@ -169,7 +169,11 @@ def save_velo_data_stream(velodyne_data_folder, velodyne_target_folder,
     os.makedirs(velodyne_target_folder_data2, exist_ok=True)
     velo_filenames = sorted(os.listdir(velo_data_dir))
 
-    def read_timestamps(filename='timestamps.txt') -> typing.List[datetime]:
+    if missing_files:
+        for i in missing_files:
+            velo_filenames.insert(i, None)
+
+    def read_timestamps(filename) -> typing.List[datetime]:
         d = []
         with open(os.path.join(velodyne_data_folder, filename)) as f:
             lines = f.readlines()
@@ -179,27 +183,32 @@ def save_velo_data_stream(velodyne_data_folder, velodyne_target_folder,
                     continue
                 dt = datetime.strptime(line[:-4], '%Y-%m-%d %H:%M:%S.%f')
                 d.append(dt)
+
+        if missing_files:
+            for i in missing_files:
+                d.insert(i, None)
+
         return d
 
-    velo_datetimes = read_timestamps()
+    velo_datetimes = read_timestamps('timestamps.txt')
     velo_datetimes_start = read_timestamps('timestamps_start.txt')
     velo_datetimes_end = read_timestamps('timestamps_end.txt')
 
-    if len(velo_datetimes) != len(velo_datetimes_start) != len(velo_datetimes_end):
+    if len(velo_datetimes) != len(velo_datetimes_start) != len(velo_datetimes_end) != \
+            len(velo_filenames):
         raise RuntimeError("Invalid datatimes len")
 
     data = deque(maxlen=3)
     for i in range(3):
-        data.append((np.empty(shape=[0, ], dtype=np.float32), None, None))
+        data.append((np.empty(shape=[0, ], dtype=np.float32), None, None, -3+i))
     bar = progressbar.ProgressBar(max_value=len(velo_datetimes))
 
-    row_counts = []
     point_cloud_counter = 0
     split_cloud_counter = 0
 
     timestamps_target_path = os.path.join(velodyne_target_folder, 'timestamps.txt')
 
-    def do_stuff(counter, counter2):
+    def do_stuff(counter2):
         clouds = partition_pointcloud(data, num_sectors=num_sectors)
         timestamps = partition_timestamps(*data[1][2], azimuth,
                                           num_sectors=num_sectors)
@@ -209,6 +218,7 @@ def save_velo_data_stream(velodyne_data_folder, velodyne_target_folder,
         # cut away ground (z < 1.4m)
         clouds_without_ground = [c[c[:, 2] > -1.4] for c in clouds]
 
+        counter = data[1][3]
         for c, c_ground in zip(clouds, clouds_without_ground):
             c.tofile(os.path.join(velodyne_target_folder_data,
                                   '{:010d}_{:02d}.bin'.format(counter, counter2)))
@@ -221,11 +231,12 @@ def save_velo_data_stream(velodyne_data_folder, velodyne_target_folder,
                                                                      velo_datetimes_start,
                                                                      velo_datetimes_end,
                                                                      velo_filenames))):
-            if dt is None:
-                raise RuntimeError("Dt is None {}".format(filename))
+            # if dt is None:
+            #     raise RuntimeError("Dt is None {}".format(filename))
             if i in missing_files:
                 # insert empty scan and empty azimuth list
-                scan = np.empty(shape=(0, 4), dtype=np.float32)
+                # scan = np.empty(shape=(0, 4), dtype=np.float32)
+                scan = None
                 time_corrected_azimuth = np.empty(shape=(0, ), dtype=np.float32)
             else:
                 velo_filename = os.path.join(velo_data_dir, filename)
@@ -240,14 +251,15 @@ def save_velo_data_stream(velodyne_data_folder, velodyne_target_folder,
                 except RuntimeError as e:
                     raise RuntimeError("{}: {}".format(filename, str(e)))
 
-            data.append((time_corrected_azimuth, scan, (dt, dt_start, dt_end)))
+            data.append((time_corrected_azimuth, scan, (dt, dt_start, dt_end), point_cloud_counter))
             if data[1][1] is not None:
-                do_stuff(point_cloud_counter, split_cloud_counter)
-                point_cloud_counter += 1
+                # processes data[1] -> previous data frame
+                do_stuff(split_cloud_counter)
+            point_cloud_counter += 1
 
         # process last point cloud
-        data.append((np.empty(shape=[0, ], dtype=np.float32), None, None))
-        do_stuff(point_cloud_counter, split_cloud_counter)
+        data.append((np.empty(shape=[0, ], dtype=np.float32), None, None, point_cloud_counter))
+        do_stuff(split_cloud_counter)
         point_cloud_counter += 1
 
     # copy timestamps to second location
