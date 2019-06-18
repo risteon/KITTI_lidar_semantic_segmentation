@@ -469,11 +469,15 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
                           'semantics_visual_02', 'semantics_visual_03',)
 
     # insert None for missing velodyne point clouds
+    # insert None at the same positions for all velodyne datetime lists
+    # Todo: naming mismatch 'velodyne_points' vs. 'velodyne'
     if missing_files['velodyne_points']:
-        f_velodyne = list(filenames['velodyne'])
         for i in missing_files['velodyne_points']:
-            f_velodyne.insert(i, None)
-        filenames['velodyne_points'] = np.asarray(f_velodyne)
+            filenames['velodyne'] = np.insert(filenames['velodyne'], i, None)
+            x = []
+            for dt_list in velo_datetimes:
+                x.append(np.insert(dt_list, i, None))
+            velo_datetimes = tuple(x)
 
     it = iter(filenames.values())
     target_len = len(next(it))
@@ -489,11 +493,6 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
         poses_interpolator, zero_time = prepare_ego_motion_interpolation(data_src)
     else:
         poses_interpolator, zero_time = None, None
-
-    if progress_bar:
-        bar = progressbar.ProgressBar()
-    else:
-        def bar(x): return x
 
     # output folder for ego-motion-corrected point clouds
     output_path_pointcloud = data_target / 'velodyne_points_corrected' / 'data'

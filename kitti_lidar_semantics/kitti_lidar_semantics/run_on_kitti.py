@@ -154,6 +154,7 @@ def process_sequence_part_a(checkpoint, kitti_root, cartographer_script, velo_ca
                             sequence):
     logger.info("Processing Sequence {}/{} PART A".format(sequence[0], sequence[1]))
     count, missing = get_raw_sequence_sample_count(sequence)
+    # in sequence 2011-09-26/0009 4 velodyne frames are missing.
     if any(v for v in missing.values()) and len(missing['velodyne_points']) > 5:
         err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
         return False, err
