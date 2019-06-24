@@ -290,21 +290,21 @@ def correct_ego_motion(point_cloud: np.ndarray, poses_interpolator, t, t_start, 
     d = np.searchsorted(bins, sensorhead_azimuth, side='left')
 
     ego_motion_corrected = np.empty(shape=point_cloud.shape, dtype=point_cloud.dtype)
-    p = 0
-    # perform ego motion correction for every bin. Keep ordering of points!
-    for s in range(num_sectors_with_overlap):
-        sector = point_cloud[d == (s + 1)]
-        points = sector.copy()
-        points[:, 3] = 1.0
-        transformed = np.squeeze(np.matmul(poses[s], np.expand_dims(points, axis=-1)), axis=-1)
-        # ego_motion_corrected[p:p + len(points), ...] = \
-        #     np.squeeze(np.matmul(poses[s], np.expand_dims(points, axis=-1)), axis=-1)
-        # ego_motion_corrected[p:p + len(points), 3] = sector[:, 3]
-        ego_motion_corrected[d == (s + 1)] = \
-            np.concatenate((transformed[:, :3], sector[:, 3:]), axis=-1)
-        p += len(points)
-
-    assert p == len(point_cloud) and point_cloud.shape == ego_motion_corrected.shape
+    # p = 0
+    # # perform ego motion correction for every bin. Keep ordering of points!
+    # for s in range(num_sectors_with_overlap):
+    #     sector = point_cloud[d == (s + 1)]
+    #     points = sector.copy()
+    #     points[:, 3] = 1.0
+    #     transformed = np.squeeze(np.matmul(poses[s], np.expand_dims(points, axis=-1)), axis=-1)
+    #     # ego_motion_corrected[p:p + len(points), ...] = \
+    #     #     np.squeeze(np.matmul(poses[s], np.expand_dims(points, axis=-1)), axis=-1)
+    #     # ego_motion_corrected[p:p + len(points), 3] = sector[:, 3]
+    #     ego_motion_corrected[d == (s + 1)] = \
+    #         np.concatenate((transformed[:, :3], sector[:, 3:]), axis=-1)
+    #     p += len(points)
+    #
+    # assert p == len(point_cloud) and point_cloud.shape == ego_motion_corrected.shape
     return ego_motion_corrected, pose_base
 
 
@@ -381,56 +381,56 @@ def process_single_example(i, path_pointcloud, path_img_02, path_img_03, path_se
         except RuntimeError as e:
             raise RuntimeError("{}: {}".format(path_pointcloud, str(e)))
 
-    for x, desc in ((ego_motion_corrected, 'corrected'), ):  # (point_cloud, 'original')):
-        #
-        img_coords_02, valid_mask_02 = project_onto_image(x, image_02_shape,
-                                                          kitti.calib.T_cam0_velo,
-                                                          kitti.calib.P_rect_20,
-                                                          kitti.calib.R_rect_00)
-        img_coords_03, valid_mask_03 = project_onto_image(x, image_03_shape,
-                                                          kitti.calib.T_cam0_velo,
-                                                          kitti.calib.P_rect_30,
-                                                          kitti.calib.R_rect_00)
+    # for x, desc in ((ego_motion_corrected, 'corrected'), ):  # (point_cloud, 'original')):
+    #     #
+    #     img_coords_02, valid_mask_02 = project_onto_image(x, image_02_shape,
+    #                                                       kitti.calib.T_cam0_velo,
+    #                                                       kitti.calib.P_rect_20,
+    #                                                       kitti.calib.R_rect_00)
+    #     img_coords_03, valid_mask_03 = project_onto_image(x, image_03_shape,
+    #                                                       kitti.calib.T_cam0_velo,
+    #                                                       kitti.calib.P_rect_30,
+    #                                                       kitti.calib.R_rect_00)
+    #
+    #     # only use points visible in both images
+    #     valid_mask = np.logical_and(valid_mask_02, valid_mask_03)
+    #
+    #     # load semantic output from files
+    #     sem_probs = [
+    #         dict(np.load(path_sem_02)),
+    #         dict(np.load(path_sem_03)),
+    #     ]
+    #     # RETURNS: [images x scales x channels x points]
+    #     interpolated_probs, valid_mapping = interpolate_and_fuse(
+    #         [img_coords_02, img_coords_03], valid_mask, sem_probs, scales, channels_last)
+    #     # RESULTS: [images x points x channels]
+    #     per_image_probs = np.mean(interpolated_probs, axis=(1, )).transpose((0, 2, 1))
+    #
+    #     stats = single_frame_stats(interpolated_probs, scales)
+    #
+    #     # project onto RGB image (for visual inspection)
+    #     # if i % 50 == 0 or last_example:
+    #     #     print("Consensus Mean: {}, Consensus Vote: {}".format(stats[2], stats[3]))
+    #     #     # stats[4] is concensus mask
+    #     #     # valid_mask[valid_mask] = stats[4]
+    #     #
+    #     #     image_02 = read_png_image(path_img_02)
+    #     #     sem_img_02 = read_png_image(path_sem_img_02)
+    #     #     debug_img_02 = make_debug_image(image_02, img_coords_02, valid_mask, x,
+    #     #                                     sem_image=sem_img_02,
+    #     #                                     per_image_probs=per_image_probs,
+    #     #                                     valid_mapping=valid_mapping)
+    #     #     image_03 = read_png_image(path_img_03)
+    #     #     sem_img_03 = read_png_image(path_sem_img_03)
+    #     #     debug_img_03 = make_debug_image(image_03, img_coords_03, valid_mask, x,
+    #     #                                     sem_image=sem_img_03,
+    #     #                                     per_image_probs=per_image_probs,
+    #     #                                     valid_mapping=valid_mapping)
+    #     #     debug_img = debug_img_02, debug_img_03
+    #     # else:
+    #     debug_img = None
 
-        # only use points visible in both images
-        valid_mask = np.logical_and(valid_mask_02, valid_mask_03)
-
-        # load semantic output from files
-        sem_probs = [
-            dict(np.load(path_sem_02)),
-            dict(np.load(path_sem_03)),
-        ]
-        # RETURNS: [images x scales x channels x points]
-        interpolated_probs, valid_mapping = interpolate_and_fuse(
-            [img_coords_02, img_coords_03], valid_mask, sem_probs, scales, channels_last)
-        # RESULTS: [images x points x channels]
-        per_image_probs = np.mean(interpolated_probs, axis=(1, )).transpose((0, 2, 1))
-
-        stats = single_frame_stats(interpolated_probs, scales)
-
-        # project onto RGB image (for visual inspection)
-        if i % 50 == 0 or last_example:
-            print("Consensus Mean: {}, Consensus Vote: {}".format(stats[2], stats[3]))
-            # stats[4] is concensus mask
-            # valid_mask[valid_mask] = stats[4]
-
-            image_02 = read_png_image(path_img_02)
-            sem_img_02 = read_png_image(path_sem_img_02)
-            debug_img_02 = make_debug_image(image_02, img_coords_02, valid_mask, x,
-                                            sem_image=sem_img_02,
-                                            per_image_probs=per_image_probs,
-                                            valid_mapping=valid_mapping)
-            image_03 = read_png_image(path_img_03)
-            sem_img_03 = read_png_image(path_sem_img_03)
-            debug_img_03 = make_debug_image(image_03, img_coords_03, valid_mask, x,
-                                            sem_image=sem_img_03,
-                                            per_image_probs=per_image_probs,
-                                            valid_mapping=valid_mapping)
-            debug_img = debug_img_02, debug_img_03
-        else:
-            debug_img = None
-
-    return ego_motion_corrected, per_image_probs, valid_mapping, sensor_pose, stats, debug_img
+    return ego_motion_corrected, None, None, sensor_pose, None, None
 
 
 def make_example_proto(data_probs: np.ndarray, valid_mapping: np.ndarray) -> tf.train.Example:
@@ -467,7 +467,7 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
     velo_datetimes = read_timestamps_from_file(data_src['velodyne'].timestamps)
     image_datetimes = read_timestamps_from_file(data_src['image_02'].timestamps)
     filenames = get_files(data_src,
-                          'velodyne', 'image_02', 'image_03', 'semantics_02', 'semantics_03',
+                          'velodyne', 'image_02', 'image_03',
                           'semantics_visual_02', 'semantics_visual_03',)
 
     # insert None for missing velodyne point clouds
@@ -541,53 +541,53 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
         f_name = filename_formatter.format(
             file_counter, total_number_of_files)
 
-        with tf.io.TFRecordWriter(f_name, options=tf.io.TFRecordCompressionType.GZIP) as writer:
+        #with tf.io.TFRecordWriter(f_name, options=tf.io.TFRecordCompressionType.GZIP) as writer:
 
-            samples_written_in_file = 0
-            while True:  # < loop over samples in current file
+        samples_written_in_file = 0
+        while True:  # < loop over samples in current file
 
-                if i not in missing_files['velodyne_points']:
-                    point_cloud_corrected, probs, mapping, sensor_pose, stats, debug_imgs = \
-                        process_single_example(
-                            i,
-                            filenames['velodyne'][i], filenames['image_02'][i],
-                            filenames['image_03'][i],
-                            filenames['semantics_02'][i],
-                            filenames['semantics_03'][i],
-                            filenames['semantics_visual_02'][i],
-                            filenames['semantics_visual_03'][i],
-                            scales, poses_interpolator, kitti, timestamps=(v[i]
-                                                                           for v in velo_datetimes),
-                            velo_calib=velo_calib, zero_time=zero_time,
-                            enable_ego_motion_correction=enable_ego_motion_correction,
-                            channels_last=channels_last,
-                            last_example=i == target_len - 1
-                        )
-                    # write ego motion corrected point cloud
-                    write_binary_point_cloud_with_intensity(str(output_path_pointcloud /
-                                                                '{:010d}.bin'.format(i)),
-                                                            point_cloud_corrected)
+            if i not in missing_files['velodyne_points']:
+                point_cloud_corrected, probs, mapping, sensor_pose, stats, debug_imgs = \
+                    process_single_example(
+                        i,
+                        filenames['velodyne'][i], filenames['image_02'][i],
+                        filenames['image_03'][i],
+                        None,
+                        None,
+                        None,
+                        None,
+                        scales, poses_interpolator, kitti, timestamps=(v[i]
+                                                                       for v in velo_datetimes),
+                        velo_calib=velo_calib, zero_time=zero_time,
+                        enable_ego_motion_correction=enable_ego_motion_correction,
+                        channels_last=channels_last,
+                        last_example=i == target_len - 1
+                    )
+                # write ego motion corrected point cloud
+                # write_binary_point_cloud_with_intensity(str(output_path_pointcloud /
+                #                                             '{:010d}.bin'.format(i)),
+                #                                         point_cloud_corrected)
 
-                    # save to write to disk in a single file later
-                    sensor_poses.append(sensor_pose)
+                # save to write to disk in a single file later
+                sensor_poses.append(sensor_pose)
 
-                    # write semantic predictions as tfrecord
-                    writer.write(make_example_proto(probs, mapping).SerializeToString())
-                    # save stats
-                    statistics['concensus_mean'][i] = stats[2]
-                    statistics['concensus_vote'][i] = stats[3]
-                    # debug images
-                    if debug_imgs:
-                        debug_imgs[0].save(str(output_path_debug / 'debug_02_{:05d}.png'.format(i)))
-                        debug_imgs[1].save(str(output_path_debug / 'debug_03_{:05d}.png'.format(i)))
+                # write semantic predictions as tfrecord
+                # writer.write(make_example_proto(probs, mapping).SerializeToString())
+                # save stats
+                # statistics['concensus_mean'][i] = stats[2]
+                # statistics['concensus_vote'][i] = stats[3]
+                # # debug images
+                # if debug_imgs:
+                #     debug_imgs[0].save(str(output_path_debug / 'debug_02_{:05d}.png'.format(i)))
+                #     debug_imgs[1].save(str(output_path_debug / 'debug_03_{:05d}.png'.format(i)))
 
-                # looping
-                if progressbar is not None:
-                    bar.update(i)
-                i += 1
-                samples_written_in_file += 1
-                if samples_written_in_file == samples_per_file or i == target_len:
-                    break
+            # looping
+            if progressbar is not None:
+                bar.update(i)
+            i += 1
+            samples_written_in_file += 1
+            if samples_written_in_file == samples_per_file or i == target_len:
+                break
 
     # save sensor poses (as .npy and .txt)
     sensor_poses = np.stack(sensor_poses, axis=0)
@@ -597,6 +597,6 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
             txt_file.write(' '.join(map(str, list(pose.flatten()))) + '\n')
 
     # save stats
-    np.savez(str(output_path_probs / 'concensus_stats'), **statistics)
-    logger.info("Sequence consensus [mean/vote]: {} / {}"
-                .format(statistics['concensus_mean'].mean(), statistics['concensus_vote'].mean()))
+    # np.savez(str(output_path_probs / 'concensus_stats'), **statistics)
+    # logger.info("Sequence consensus [mean/vote]: {} / {}"
+    #             .format(statistics['concensus_mean'].mean(), statistics['concensus_vote'].mean()))

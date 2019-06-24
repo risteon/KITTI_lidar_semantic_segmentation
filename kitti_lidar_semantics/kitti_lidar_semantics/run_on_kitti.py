@@ -98,44 +98,44 @@ def generate_stereo_semantics(tmp_dir, output_dir, checkpoint, sequence, expecte
                               input_suffix):
     checkpoint_iteration = pathlib.Path(checkpoint).name.split('-')[-1]
     sem_folder_name = 'sem_deeplab_v3+71_{}_{}'.format(checkpoint_iteration, input_suffix)
-    output_path_tmp = tmp_dir / sem_folder_name
-    output_path_tmp.mkdir(exist_ok=True, parents=True)
-    output_path_tmp_data = output_path_tmp / 'data'
-    output_path_sem = output_dir /\
-                      'sem_deeplab_v3+71_{}_{}'.format(checkpoint_iteration, input_suffix)
-    output_path_sem_data = output_path_sem / 'data'
-
-    input_path = pathlib.Path(sequence[2]) / 'image_{}'.format(input_suffix)
-    make_rgb_semantics(input_folder=input_path / 'data',
-                       output_folder=output_path_tmp_data,
-                       checkpoint=checkpoint)
-
-    # copy generated pngs to processed output folder
-    sem_pngs = [x for x in output_path_tmp_data.iterdir() if x.suffix == '.png']
-    if len(sem_pngs) != expected_count:
-        raise RuntimeError(
-            "Invalid number of generated semantic png's in {}.".format(output_path_tmp_data))
-
-    # copy RGB semantics to processed output folder
-    if output_path_sem_data.exists():
-        shutil.rmtree(output_path_sem_data)
-    output_path_sem_data.mkdir(exist_ok=False, parents=True)
-    targets = [output_path_sem_data / x.name for x in sem_pngs]
-    for png, target in zip(sem_pngs, targets):
-        with target.open(mode='xb') as tid:
-            tid.write(png.read_bytes())
-
-    # copy timestamps
-    try:
-        with (output_path_tmp / 'timestamps.txt').open(mode='xb') as tid:
-            tid.write((input_path / 'timestamps.txt').read_bytes())
-    except FileExistsError:
-        pass
-    try:
-        with (output_path_sem / 'timestamps.txt').open(mode='xb') as tid:
-            tid.write((input_path / 'timestamps.txt').read_bytes())
-    except FileExistsError:
-        pass
+    # output_path_tmp = tmp_dir / sem_folder_name
+    # output_path_tmp.mkdir(exist_ok=True, parents=True)
+    # output_path_tmp_data = output_path_tmp / 'data'
+    # output_path_sem = output_dir /\
+    #                   'sem_deeplab_v3+71_{}_{}'.format(checkpoint_iteration, input_suffix)
+    # output_path_sem_data = output_path_sem / 'data'
+    #
+    # input_path = pathlib.Path(sequence[2]) / 'image_{}'.format(input_suffix)
+    # make_rgb_semantics(input_folder=input_path / 'data',
+    #                    output_folder=output_path_tmp_data,
+    #                    checkpoint=checkpoint)
+    #
+    # # copy generated pngs to processed output folder
+    # sem_pngs = [x for x in output_path_tmp_data.iterdir() if x.suffix == '.png']
+    # if len(sem_pngs) != expected_count:
+    #     raise RuntimeError(
+    #         "Invalid number of generated semantic png's in {}.".format(output_path_tmp_data))
+    #
+    # # copy RGB semantics to processed output folder
+    # if output_path_sem_data.exists():
+    #     shutil.rmtree(output_path_sem_data)
+    # output_path_sem_data.mkdir(exist_ok=False, parents=True)
+    # targets = [output_path_sem_data / x.name for x in sem_pngs]
+    # for png, target in zip(sem_pngs, targets):
+    #     with target.open(mode='xb') as tid:
+    #         tid.write(png.read_bytes())
+    #
+    # # copy timestamps
+    # try:
+    #     with (output_path_tmp / 'timestamps.txt').open(mode='xb') as tid:
+    #         tid.write((input_path / 'timestamps.txt').read_bytes())
+    # except FileExistsError:
+    #     pass
+    # try:
+    #     with (output_path_sem / 'timestamps.txt').open(mode='xb') as tid:
+    #         tid.write((input_path / 'timestamps.txt').read_bytes())
+    # except FileExistsError:
+    #     pass
 
     return sem_folder_name
 
@@ -206,26 +206,26 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
         # PARTITION POINT CLOUDS
         logger.info("Partitioning point clouds.")
         # complete point cloud
-        path_partitioned = processed_output / 'velodyne_points_partitioned'
-        path_partitioned.mkdir(parents=True, exist_ok=True)
-        # point cloud without points z < -1.4m
-        path_partitioned2 = tmp_dir / 'velodyne_points_partitioned_truncated'
-        path_partitioned2.mkdir(parents=True, exist_ok=True)
-        save_velo_data_stream(velodyne_data_folder=pathlib.Path(sequence[2]) / 'velodyne_points',
-                              velodyne_target_folder=str(path_partitioned),
-                              velodyne_target_folder2=str(path_partitioned2),
-                              velo_calib=velo_calib, missing_files=missing['velodyne_points'])
+        # path_partitioned = processed_output / 'velodyne_points_partitioned'
+        # path_partitioned.mkdir(parents=True, exist_ok=True)
+        # # point cloud without points z < -1.4m
+        # path_partitioned2 = tmp_dir / 'velodyne_points_partitioned_truncated'
+        # path_partitioned2.mkdir(parents=True, exist_ok=True)
+        # save_velo_data_stream(velodyne_data_folder=pathlib.Path(sequence[2]) / 'velodyne_points',
+        #                       velodyne_target_folder=str(path_partitioned),
+        #                       velodyne_target_folder2=str(path_partitioned2),
+        #                       velo_calib=velo_calib, missing_files=missing['velodyne_points'])
 
         # CARTOGRAPHER
-        logger.info("Running cartographer.")
-        # redirect output ...
-        stdout = open(str(tmp_dir / "stdout.txt"), "wb")
-        stderr = open(str(tmp_dir / "stderr.txt"), "wb")
-        if subprocess.call([str(cartographer_script), str(kitti_root), str(tmp_dir), sequence[0],
-                            sequence[1], str(processed_output)], stdout=stdout, stderr=stderr):
-            raise RuntimeError("Error when calling cartographer.")
-
-        # EGO MOTION CORRECTION + INTERPOLATION OF PROBS
+        # logger.info("Running cartographer.")
+        # # redirect output ...
+        # stdout = open(str(tmp_dir / "stdout.txt"), "wb")
+        # stderr = open(str(tmp_dir / "stderr.txt"), "wb")
+        # if subprocess.call([str(cartographer_script), str(kitti_root), str(tmp_dir), sequence[0],
+        #                     sequence[1], str(processed_output)], stdout=stdout, stderr=stderr):
+        #     raise RuntimeError("Error when calling cartographer.")
+        #
+        # # EGO MOTION CORRECTION + INTERPOLATION OF PROBS
         pykitti_obj = pykitti.raw(kitti_root, sequence[0], sequence[1])
         s_root = pathlib.Path(sequence[2])
 
@@ -246,12 +246,12 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
             'image_03': Data(timestamps=s_root / 'image_03/timestamps.txt',
                              data=s_root / 'image_03/data',
                              file_extension='png'),
-            'semantics_02': Data(timestamps=path_sem_02 / 'timestamps.txt',
-                                 data=path_sem_02 / 'data',
-                                 file_extension='npz'),
-            'semantics_03': Data(timestamps=path_sem_03 / 'timestamps.txt',
-                                 data=path_sem_03 / 'data',
-                                 file_extension='npz'),
+            # 'semantics_02': Data(timestamps=path_sem_02 / 'timestamps.txt',
+            #                      data=path_sem_02 / 'data',
+            #                      file_extension='npz'),
+            # 'semantics_03': Data(timestamps=path_sem_03 / 'timestamps.txt',
+            #                      data=path_sem_03 / 'data',
+            #                      file_extension='npz'),
             'semantics_visual_02': Data(
                 timestamps=processed_output / sem_folder_02 / 'timestamps.txt',
                 data=processed_output / sem_folder_02 / 'data',
@@ -264,7 +264,7 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
             ),
         }
 
-        check_paths(data)
+        # check_paths(data)
         logger.info("Starting Ego-Motion correction and interpolation")
         do_work(pykitti_obj, data_src=data, data_target=processed_output, velo_calib=velo_calib,
                 scales=['0.25_a', '0.25_b', '0.75_a', '0.75_b', '2.0_a', '2.0_b'],
@@ -272,8 +272,8 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
                 missing_files=missing)
 
         # create a success marker
-        with open(str(processed_output / 'log'), 'w') as f:
-            f.write('complete ' + str(datetime.datetime.now()))
+        # with open(str(processed_output / 'log'), 'w') as f:
+        #     f.write('complete ' + str(datetime.datetime.now()))
 
     except Exception as e:
         tb = traceback.format_exc()
@@ -286,9 +286,7 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
         results.extend([False, str(e), sequence])
         return
     finally:
-        # Todo DEBUG
-        pass
-        # shutil.rmtree(tmp_dir)
+        shutil.rmtree(tmp_dir)
     results.extend([True, 'ok', sequence])
     return
 
@@ -367,8 +365,8 @@ def main(kitti_root, output, checkpoint, day, start_at):
                     .format(str(datetime.datetime.now()), s[0], s[1], msg)
             try:
                 logger.info(msg)
-                log_file.write('{}\n'.format(msg))
-                log_file.flush()
+                # log_file.write('{}\n'.format(msg))
+                # log_file.flush()
             except Exception as e:
                 print("Could not write log: {}".format(str(e)))
 
