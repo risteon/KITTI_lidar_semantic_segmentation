@@ -305,7 +305,7 @@ def correct_ego_motion(point_cloud: np.ndarray, poses_interpolator, t, t_start, 
         p += len(points)
 
     assert p == len(point_cloud) and point_cloud.shape == ego_motion_corrected.shape
-    return ego_motion_corrected
+    return ego_motion_corrected, pose_base
 
 
 def load_poses_from_file(filepath_poses: pathlib.Path):
@@ -372,10 +372,12 @@ def process_single_example(i, path_pointcloud, path_img_02, path_img_03, path_se
         ego_motion_corrected = point_cloud
     else:
         try:
-            ego_motion_corrected = correct_ego_motion(point_cloud, poses_interpolator,
-                                                      *timestamps,
-                                                      velo_calib, zero_time,
-                                                      auto_correct=not last_example)
+            ego_motion_corrected, sensor_pose = correct_ego_motion(
+                point_cloud, poses_interpolator,
+                *timestamps,
+                velo_calib, zero_time,
+                auto_correct=not last_example
+            )
         except RuntimeError as e:
             raise RuntimeError("{}: {}".format(path_pointcloud, str(e)))
 
@@ -428,7 +430,7 @@ def process_single_example(i, path_pointcloud, path_img_02, path_img_03, path_se
         else:
             debug_img = None
 
-    return ego_motion_corrected, per_image_probs, valid_mapping, stats, debug_img
+    return ego_motion_corrected, per_image_probs, valid_mapping, sensor_pose, stats, debug_img
 
 
 def make_example_proto(data_probs: np.ndarray, valid_mapping: np.ndarray) -> tf.train.Example:
@@ -503,6 +505,9 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
     # output folder for debug images
     output_path_debug = data_target / 'debug'
     output_path_debug.mkdir(parents=False, exist_ok=True)
+    # output for sensor poses
+    output_path_sensor_poses = data_target / 'poses_sensor'
+    output_path_sensor_poses.mkdir(parents=False, exist_ok=True)
     # save stats and merge to per-sequence stats
     statistics = {'concensus_mean': np.empty(shape=(target_len,), dtype=np.float32),
                   'concensus_vote': np.empty(shape=(target_len,), dtype=np.float32), }
@@ -525,6 +530,9 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
         bar = None
 
     i = 0
+
+    sensor_poses = []
+
     for file_counter in range(total_number_of_files):
 
         if i == target_len:
@@ -539,21 +547,30 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
             while True:  # < loop over samples in current file
 
                 if i not in missing_files['velodyne_points']:
-                    point_cloud_corrected, probs, mapping, stats, debug_imgs = process_single_example(
-                        i,
-                        filenames['velodyne'][i], filenames['image_02'][i], filenames['image_03'][i],
-                        filenames['semantics_02'][i], filenames['semantics_03'][i],
-                        filenames['semantics_visual_02'][i], filenames['semantics_visual_03'][i],
-                        scales, poses_interpolator, kitti, timestamps=(v[i] for v in velo_datetimes),
-                        velo_calib=velo_calib, zero_time=zero_time,
-                        enable_ego_motion_correction=enable_ego_motion_correction,
-                        channels_last=channels_last,
-                        last_example=i == target_len - 1
-                    )
+                    point_cloud_corrected, probs, mapping, sensor_pose, stats, debug_imgs = \
+                        process_single_example(
+                            i,
+                            filenames['velodyne'][i], filenames['image_02'][i],
+                            filenames['image_03'][i],
+                            filenames['semantics_02'][i],
+                            filenames['semantics_03'][i],
+                            filenames['semantics_visual_02'][i],
+                            filenames['semantics_visual_03'][i],
+                            scales, poses_interpolator, kitti, timestamps=(v[i]
+                                                                           for v in velo_datetimes),
+                            velo_calib=velo_calib, zero_time=zero_time,
+                            enable_ego_motion_correction=enable_ego_motion_correction,
+                            channels_last=channels_last,
+                            last_example=i == target_len - 1
+                        )
                     # write ego motion corrected point cloud
                     write_binary_point_cloud_with_intensity(str(output_path_pointcloud /
                                                                 '{:010d}.bin'.format(i)),
                                                             point_cloud_corrected)
+
+                    # save to write to disk in a single file later
+                    sensor_poses.append(sensor_pose)
+
                     # write semantic predictions as tfrecord
                     writer.write(make_example_proto(probs, mapping).SerializeToString())
                     # save stats
@@ -571,6 +588,13 @@ def do_work(kitti, data_src, data_target, velo_calib, scales,
                 samples_written_in_file += 1
                 if samples_written_in_file == samples_per_file or i == target_len:
                     break
+
+    # save sensor poses (as .npy and .txt)
+    sensor_poses = np.stack(sensor_poses, axis=0)
+    np.save(str(output_path_sensor_poses / 'sensor_poses.npy'), sensor_poses)
+    with open(str(output_path_sensor_poses / 'sensor_poses.txt'), 'w') as txt_file:
+        for pose in sensor_poses:
+            txt_file.write(' '.join(map(str, list(pose.flatten()))) + '\n')
 
     # save stats
     np.savez(str(output_path_probs / 'concensus_stats'), **statistics)
