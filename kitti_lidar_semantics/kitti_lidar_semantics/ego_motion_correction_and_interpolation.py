@@ -336,8 +336,8 @@ def prepare_ego_motion_interpolation(data_src):
     """
     poses = load_poses_from_file(data_src['map_cartographer'].data)
     poses_datetimes = read_timestamps_from_file(data_src['map_cartographer'].timestamps)
-    # scipy uses scalar last xyzw quaternion format
-    rotations = R.from_quat(poses[:, [6, 3, 4, 5]], normalized=False)
+    # scipy uses scalar last xyzw quaternion format. So reorder from 'wxyz' to 'xyzw'
+    rotations = R.from_quat(poses[:, [4, 5, 6, 3]], normalized=False)
     delta_sec = np.vectorize(datetime.timedelta.total_seconds)(poses_datetimes - poses_datetimes[0])
     slerp = Slerp(delta_sec, rotations)
     transl = scipy.interpolate.interp1d(delta_sec, poses[:, 0:3], kind='linear', axis=0, copy=False,
