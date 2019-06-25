@@ -286,9 +286,7 @@ def process_sequence_part_b(data_from_part_a, kitti_root, cartographer_script, v
         results.extend([False, str(e), sequence])
         return
     finally:
-        # Todo DEBUG
-        pass
-        # shutil.rmtree(tmp_dir)
+        shutil.rmtree(tmp_dir)
     results.extend([True, 'ok', sequence])
     return
 
