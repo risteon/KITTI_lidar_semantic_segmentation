@@ -150,13 +150,14 @@ def check_paths(data):
                 raise FileNotFoundError("Not a file {}.".format(t))
 
 
-def process_sequence_part_a(checkpoint, kitti_root, cartographer_script, velo_calib, output_dir,
-                            sequence):
+def process_sequence_part_a(checkpoint, output_dir, sequence):
     logger.info("Processing Sequence {}/{} PART A".format(sequence[0], sequence[1]))
     count, missing = get_raw_sequence_sample_count(sequence)
     # in sequence 2011-09-26/0009 4 velodyne frames are missing.
     if any(v for v in missing.values()) and len(missing['velodyne_points']) > 5:
-        err = "Invalid sequence {}_{}".format(sequence[0], sequence[1])
+        err = "Invalid sequence {}_{}".format(sequence[0], sequence[1]) + \
+              '\nMissing files: {}\nMissing velodyne: {}'\
+                  .format(missing, missing['velodyne_points'])
         return False, err
 
     tmp_dir = tempfile.mkdtemp(prefix='kitti_semantics_{}_{}'.format(sequence[0], sequence[1]))
@@ -343,9 +344,7 @@ def main(kitti_root, output, checkpoint, day, start_at):
     with open(str(output / 'log_{}'.format(time.strftime("%Y%m%d-%H%M%S"))), 'w') as log_file:
         for s in sequences:
 
-            succ, msg = process_sequence_part_a(checkpoint, kitti_root,
-                                                cartographer_script, velo_calib,
-                                                output, s)
+            succ, msg = process_sequence_part_a(checkpoint, output, s)
             if succ:
                 data_part_a = msg
                 msg = '{} Processed KITTI sequence {}/{} PART A successfully.'\
